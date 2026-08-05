@@ -1,0 +1,22 @@
+{
+  "strokes": [
+    { "event_index": 0, "stroke_type": "發短球", "confidence": 0.6067 },
+    { "event_index": 1, "stroke_type": "推球", "confidence": 0.7349 },
+    { "event_index": 2, "stroke_type": "長球", "confidence": 0.9025 },
+    { "event_index": 3, "stroke_type": "長球", "confidence": 0.8225 },
+    { "event_index": 4, "stroke_type": "切球", "confidence": 0.9314 },
+    { "event_index": 5, "stroke_type": "放小球", "confidence": 0.8605 },
+    { "event_index": 6, "stroke_type": "挑球", "confidence": 0.8267 },
+    { "event_index": 7, "stroke_type": "長球", "confidence": 0.8108 },
+    { "event_index": 8, "stroke_type": "切球", "confidence": 0.8452 },
+    { "event_index": 9, "stroke_type": "放小球", "confidence": 0.8000 },
+    { "event_index": 10, "stroke_type": "放小球", "confidence": 0.8007 },
+    { "event_index": 11, "stroke_type": "放小球", "confidence": 0.8280 },
+    { "event_index": 12, "stroke_type": "挑球", "confidence": 0.8545 },
+    { "event_index": 13, "stroke_type": "殺球", "confidence": 0.8486 },
+    { "event_index": 14, "stroke_type": "擋小球", "confidence": 0.9132 },
+    { "event_index": 15, "stroke_type": "放小球", "confidence": 0.8625 },
+    { "event_index": 16, "stroke_type": "挑球", "confidence": 0.8258 },
+    { "event_index": 17, "stroke_type": "殺球", "confidence": 0.8039 }
+  ]
+}

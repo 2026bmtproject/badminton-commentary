@@ -22,6 +22,7 @@ htmlcov/
 .mypy_cache/
 .pyright/
 .ruff_cache/
+.uv-cache/
 .tox/
 .nox/
 
@@ -51,6 +52,7 @@ Desktop.ini
 AGENTS.md
 
 # Large media and model artifacts
+*.csv
 *.mp4
 *.mov
 *.avi
@@ -61,5 +63,9 @@ AGENTS.md
 *.onnx
 *.pt
 *.pth
+*.pkl
 *.ckpt
 *.safetensors
+
+# development and temporary files
+development/

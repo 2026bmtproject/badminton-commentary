@@ -1,0 +1,22 @@
+{
+  "events": [
+    { "frame": 31, "player": "a", "segment_index": 0 },
+    { "frame": 43, "player": "b", "segment_index": 0 },
+    { "frame": 69, "player": "a", "segment_index": 0 },
+    { "frame": 96, "player": "b", "segment_index": 0 },
+    { "frame": 134, "player": "a", "segment_index": 0 },
+    { "frame": 156, "player": "b", "segment_index": 0 },
+    { "frame": 184, "player": "a", "segment_index": 0 },
+    { "frame": 222, "player": "b", "segment_index": 0 },
+    { "frame": 250, "player": "a", "segment_index": 0 },
+    { "frame": 268, "player": "b", "segment_index": 0 },
+    { "frame": 291, "player": "a", "segment_index": 0 },
+    { "frame": 316, "player": "b", "segment_index": 0 },
+    { "frame": 339, "player": "a", "segment_index": 0 },
+    { "frame": 376, "player": "b", "segment_index": 0 },
+    { "frame": 389, "player": "a", "segment_index": 0 },
+    { "frame": 414, "player": "b", "segment_index": 0 },
+    { "frame": 436, "player": "a", "segment_index": 0 },
+    { "frame": 491, "player": "b", "segment_index": 0 }
+  ]
+}

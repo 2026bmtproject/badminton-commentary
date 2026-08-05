@@ -1,0 +1,12 @@
+{
+  "fps": 25.0,
+  "segments": [
+    {
+      "start_frame": 0,
+      "end_frame": 526,
+      "start_sec": 0.0,
+      "end_sec": 21.08,
+      "duration_sec": 21.08
+    }
+  ]
+}
