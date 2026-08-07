@@ -14,9 +14,81 @@ class CommentaryValidationError(ValueError):
     """Raised when generated text is not supported by its structured facts."""
 
 
+def normalize_exclamation_emphasis(text: str, *, allow_exclamation: bool) -> str:
+    """Deterministically enforce the emphasis policy without changing claims."""
+    normalized = []
+    used_exclamation = False
+    for character in text:
+        if character not in "！!":
+            normalized.append(character)
+            continue
+        if allow_exclamation and not used_exclamation:
+            normalized.append("！")
+            used_exclamation = True
+        else:
+            normalized.append("。")
+    return re.sub(r"([。！？?])(?:[。！？!?])+", r"\1", "".join(normalized))
+
+
+def commentary_allows_exclamation(scored: ScoredRallyFact) -> bool:
+    return scored.importance.score >= 0.70 or (
+        scored.fact.highlight_score is not None
+        and scored.fact.highlight_score >= 0.75
+    )
+
+
 def _sentence_count(text: str) -> int:
     parts = [part for part in re.split(r"[。！？!?]+", text) if part.strip()]
     return max(len(parts), 1)
+
+
+def validate_language_safety(*, text: str, allow_exclamation: bool) -> None:
+    exclamation_count = text.count("!") + text.count("！")
+    if exclamation_count > 1 or (exclamation_count and not allow_exclamation):
+        raise CommentaryValidationError(
+            "generated commentary uses unsupported exclamation emphasis"
+        )
+
+    internal_terms = ("觀測球路", "短窗口", "後場類型", "網前類型", "類型")
+    if any(term in text for term in internal_terms):
+        raise CommentaryValidationError(
+            "generated commentary exposes internal schema wording"
+        )
+
+    unsupported_inferences = (
+        "移動到網前",
+        "跑到網前",
+        "從後場移動",
+        "前移到網前",
+        "逼迫",
+        "迫使",
+        "掌握主動",
+        "取得主動",
+        "戰術奏效",
+        "導致",
+        "造成",
+        "因而",
+        "靠著",
+        "抓到機會",
+        "被迫",
+    )
+    if any(term in text for term in unsupported_inferences):
+        raise CommentaryValidationError(
+            "generated commentary makes an unsupported movement or causal inference"
+        )
+
+    unsupported_outcome_claims = (
+        "致勝",
+        "拿下這一分",
+        "拿下分數",
+        "得分",
+        "最後一拍",
+        "最後以",
+    )
+    if any(claim in text for claim in unsupported_outcome_claims):
+        raise CommentaryValidationError(
+            "generated commentary makes an unsupported rally outcome claim"
+        )
 
 
 def validate_commentary(
@@ -38,57 +110,10 @@ def validate_commentary(
             f"generated commentary exceeds {plan.max_sentences} sentences"
         )
 
-    exclamation_count = generated.text.count("!") + generated.text.count("！")
-    high_emotion_allowed = (
-        scored.importance.score >= 0.70
-        or (
-            scored.fact.highlight_score is not None
-            and scored.fact.highlight_score >= 0.75
-        )
+    validate_language_safety(
+        text=generated.text,
+        allow_exclamation=commentary_allows_exclamation(scored),
     )
-    if exclamation_count > 1 or (exclamation_count and not high_emotion_allowed):
-        raise CommentaryValidationError(
-            "generated commentary uses unsupported exclamation emphasis"
-        )
-
-    internal_terms = ("觀測球路", "短窗口", "後場類型", "網前類型", "類型")
-    if any(term in generated.text for term in internal_terms):
-        raise CommentaryValidationError(
-            "generated commentary exposes internal schema wording"
-        )
-
-    unsupported_inferences = (
-        "移動到網前",
-        "跑到網前",
-        "從後場移動",
-        "前移到網前",
-        "逼迫",
-        "迫使",
-        "掌握主動",
-        "取得主動",
-        "戰術奏效",
-        "導致",
-        "造成",
-        "因而",
-        "靠著",
-    )
-    if any(term in generated.text for term in unsupported_inferences):
-        raise CommentaryValidationError(
-            "generated commentary makes an unsupported movement or causal inference"
-        )
-
-    unsupported_outcome_claims = (
-        "致勝",
-        "拿下這一分",
-        "拿下分數",
-        "得分",
-        "最後一拍",
-        "最後以",
-    )
-    if any(claim in generated.text for claim in unsupported_outcome_claims):
-        raise CommentaryValidationError(
-            "generated commentary makes an unsupported rally outcome claim"
-        )
 
     cited_patterns = {
         fact_id

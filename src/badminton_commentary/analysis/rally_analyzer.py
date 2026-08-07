@@ -49,7 +49,7 @@ PATTERN_METADATA = {
 }
 
 
-def _analyzed_stroke(fact: RallyFact, event: RallyFactEvent) -> AnalyzedStroke | None:
+def analyze_stroke(fact: RallyFact, event: RallyFactEvent) -> AnalyzedStroke | None:
     if event.stroke_type is None or event.stroke_confidence is None:
         return None
     if event.stroke_confidence < CAUTIOUS_CONFIDENCE:
@@ -175,7 +175,7 @@ def analyze_rally(fact: RallyFact) -> RallyAnalysis:
     usable = [
         stroke
         for event in fact.events
-        if (stroke := _analyzed_stroke(fact, event)) is not None
+        if (stroke := analyze_stroke(fact, event)) is not None
     ]
     reliable = [stroke for stroke in usable if stroke.confidence_band == "reliable"]
     cautious = [stroke for stroke in usable if stroke.confidence_band == "cautious"]

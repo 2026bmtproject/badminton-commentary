@@ -189,3 +189,89 @@ class CommentaryPlansOutput(StrictModel):
 
 class CommentaryOutput(StrictModel):
     lines: list[GeneratedCommentary]
+
+
+StrokeLocalFactName = Literal[
+    "rear_exchange_continuation",
+    "rear_court_stroke_to_front_court_stroke",
+    "net_exchange_continuation",
+    "flat_exchange_continuation",
+    "net_to_lift_transition",
+    "lift_to_attack_transition",
+    "drop_lift_attack_sequence",
+]
+
+
+class StrokeLocalFact(StrictModel):
+    fact_id: str
+    name: StrokeLocalFactName
+    start_stroke_index: NonNegativeInt
+    end_stroke_index: NonNegativeInt
+    salience: Probability
+    commentary_hint: str
+    supporting_fact_ids: Annotated[list[str], Field(min_length=2, max_length=3)]
+
+
+class StrokeEventAnalysis(StrictModel):
+    segment_index: NonNegativeInt
+    stroke_index: NonNegativeInt
+    frame: NonNegativeInt
+    time_sec: NonNegativeFloat
+    current_stroke: AnalyzedStroke
+    previous_strokes: Annotated[list[AnalyzedStroke], Field(max_length=4)]
+    local_facts: list[StrokeLocalFact]
+    speaking_score: Probability
+    should_speak: bool
+
+
+class StrokeEventPlan(StrictModel):
+    segment_index: NonNegativeInt
+    stroke_index: NonNegativeInt
+    frame: NonNegativeInt
+    time_sec: NonNegativeFloat
+    should_comment: bool
+    style: CommentaryStyle
+    max_sentences: Literal[1]
+    focus: list[str]
+    allowed_fact_ids: list[str]
+
+
+class GeneratedStrokeText(StrictModel):
+    text: Annotated[str, Field(min_length=1, max_length=120)]
+    source_fact_ids: Annotated[list[str], Field(min_length=1)]
+
+
+class StrokeCommentaryLine(StrictModel):
+    segment_index: NonNegativeInt
+    stroke_index: NonNegativeInt
+    frame: NonNegativeInt
+    time_sec: NonNegativeFloat
+    text: Annotated[str, Field(min_length=1, max_length=120)]
+    source_fact_ids: Annotated[list[str], Field(min_length=1)]
+
+
+class RallyCommentaryBundle(StrictModel):
+    segment_index: NonNegativeInt
+    events: list[StrokeCommentaryLine]
+    summary: GeneratedCommentary | None
+
+
+class EventDrivenCommentaryOutput(StrictModel):
+    rallies: list[RallyCommentaryBundle]
+
+
+SubtitleKind = Literal["event", "summary"]
+
+
+class SubtitleCue(StrictModel):
+    segment_index: NonNegativeInt
+    kind: SubtitleKind
+    start_sec: NonNegativeFloat
+    end_sec: NonNegativeFloat
+    text: Annotated[str, Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "SubtitleCue":
+        if self.end_sec <= self.start_sec:
+            raise ValueError("subtitle end_sec must be greater than start_sec")
+        return self

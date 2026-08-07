@@ -351,37 +351,39 @@ def test_available_pattern_cannot_be_replaced_by_score_only():
         )
 
 
-def test_low_importance_commentary_cannot_use_exclamation_mark():
+def test_low_importance_commentary_normalizes_exclamation_mark():
     scored = make_pattern_fact()
 
-    with pytest.raises(CommentaryGenerationError, match="exclamation emphasis"):
-        generate_commentary(
-            provider=FakeProvider(
-                response=response(
-                    text="雙方由發接發銜接第三拍！",
-                    source_fact_ids=["rally:2:pattern:serve_return_pattern"],
-                )
-            ),
-            scored=scored,
-            plan=plan_commentary(scored),
-        )
+    generated = generate_commentary(
+        provider=FakeProvider(
+            response=response(
+                text="雙方由發接發銜接第三拍！",
+                source_fact_ids=["rally:2:pattern:serve_return_pattern"],
+            )
+        ),
+        scored=scored,
+        plan=plan_commentary(scored),
+    )
+
+    assert generated.text == "雙方由發接發銜接第三拍。"
 
 
-def test_high_importance_commentary_allows_at_most_one_exclamation_mark():
+def test_high_importance_commentary_normalizes_to_one_exclamation_mark():
     scored = make_pattern_fact()
     scored.importance.score = 0.75
 
-    with pytest.raises(CommentaryGenerationError, match="exclamation emphasis"):
-        generate_commentary(
-            provider=FakeProvider(
-                response=response(
-                    text="發接發後銜接第三拍！球路變化精彩！",
-                    source_fact_ids=["rally:2:pattern:serve_return_pattern"],
-                )
-            ),
-            scored=scored,
-            plan=plan_commentary(scored),
-        )
+    generated = generate_commentary(
+        provider=FakeProvider(
+            response=response(
+                text="發接發後銜接第三拍！球路變化精彩！",
+                source_fact_ids=["rally:2:pattern:serve_return_pattern"],
+            )
+        ),
+        scored=scored,
+        plan=plan_commentary(scored),
+    )
+
+    assert generated.text == "發接發後銜接第三拍！球路變化精彩。"
 
 
 @pytest.mark.parametrize("causal_term", ["迫使", "導致", "造成", "靠著"])

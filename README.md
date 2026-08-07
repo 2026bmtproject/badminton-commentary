@@ -54,7 +54,6 @@ commentary.json
 * TTS 語音合成
 * 聲音模仿
 * 影片剪輯
-* 字幕燒錄
 * 音訊與影片混音
 * 上游電腦視覺或音訊模型訓練
 
@@ -827,6 +826,43 @@ uv run badminton-commentary `
   ]
 }
 ```
+
+---
+
+## 17. 將 event-driven 賽評燒錄成字幕
+
+需要先安裝 FFmpeg，並確認 `ffmpeg` 位於 `PATH`。以下指令會讀取三組
+TTYvsASY fixture 的 `commentary_gemini_event_driven.json`，產生 ASS 字幕並燒錄到
+各自的合併影片：
+
+```powershell
+uv run python .\scripts\burn_commentary_subtitles.py `
+  --provider gemini `
+  --overwrite
+```
+
+只產生 ASS、不重新編碼影片：
+
+```powershell
+uv run python .\scripts\burn_commentary_subtitles.py `
+  --provider gemini `
+  --subtitles-only `
+  --overwrite
+```
+
+只處理其中一組：
+
+```powershell
+uv run python .\scripts\burn_commentary_subtitles.py `
+  --provider gemini `
+  --group seg0039-0043 `
+  --overwrite
+```
+
+即時 stroke commentary 使用底部白色字幕；rally summary 使用記分板下方的黃色字幕。
+原始影片不會被覆蓋，輸出檔名會加上 `_commentary_{provider}`。預設使用
+`Microsoft JhengHei`，可用 `--font-name`、`--event-font-size` 和
+`--summary-font-size` 調整。
 
 ---
 

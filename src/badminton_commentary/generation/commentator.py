@@ -14,7 +14,13 @@ from badminton_commentary.schemas import (
     ScoredRallyFact,
 )
 
-from .validator import CommentaryValidationError, validate_commentary
+from .json_response import extract_json_payload
+from .validator import (
+    CommentaryValidationError,
+    commentary_allows_exclamation,
+    normalize_exclamation_emphasis,
+    validate_commentary,
+)
 
 
 PROMPT_VERSION = "commentator-v3"
@@ -74,15 +80,6 @@ def _fact_catalog(
     return catalog
 
 
-def _response_json(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```") and stripped.endswith("```"):
-        lines = stripped.splitlines()
-        if len(lines) >= 3:
-            return "\n".join(lines[1:-1]).strip()
-    return stripped
-
-
 def generate_commentary(
     *,
     provider: LLMProvider,
@@ -118,11 +115,21 @@ def generate_commentary(
         user_prompt=json.dumps(user_payload, ensure_ascii=False, indent=2),
     )
     try:
-        generated = GeneratedCommentary.model_validate_json(_response_json(response))
+        generated = GeneratedCommentary.model_validate_json(
+            extract_json_payload(response)
+        )
     except ValidationError as exc:
         raise CommentaryGenerationError(
             f"provider returned invalid commentary JSON: {exc}"
         ) from exc
+    generated = generated.model_copy(
+        update={
+            "text": normalize_exclamation_emphasis(
+                generated.text,
+                allow_exclamation=commentary_allows_exclamation(scored),
+            )
+        }
+    )
 
     try:
         validate_commentary(
