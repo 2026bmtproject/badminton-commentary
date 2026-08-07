@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from badminton_commentary.schemas import (
     EventsInput,
     HighlightsInput,
+    RallyFactsOutput,
     ScoresInput,
     SegmentsInput,
     StrokesInput,
@@ -84,3 +85,27 @@ def test_unknown_fields_are_rejected():
 
     with pytest.raises(ValidationError, match="unexpected"):
         HighlightsInput.model_validate(payload)
+
+
+def test_scored_rally_fact_output_requires_importance():
+    payload = {
+        "rallies": [
+            {
+                "fact": {
+                    "segment_index": 0,
+                    "game_index": None,
+                    "start_sec": 0,
+                    "end_sec": 1,
+                    "duration_sec": 1,
+                    "score": {"a": 0, "b": 0},
+                    "server": None,
+                    "events": [],
+                    "rally_length": 0,
+                    "highlight_score": None,
+                }
+            }
+        ]
+    }
+
+    with pytest.raises(ValidationError, match="importance"):
+        RallyFactsOutput.model_validate(payload)

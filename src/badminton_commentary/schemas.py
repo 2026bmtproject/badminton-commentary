@@ -108,3 +108,78 @@ class RallyFact(StrictModel):
 class ImportanceResult(StrictModel):
     score: Probability
     reasons: list[str]
+
+
+class ScoredRallyFact(StrictModel):
+    fact: RallyFact
+    importance: ImportanceResult
+
+
+StrokeConfidenceBand = Literal["reliable", "cautious"]
+StrokePatternName = Literal[
+    "net_exchange",
+    "attack_sequence",
+    "clear_exchange",
+    "varied_strokes",
+]
+
+
+class AnalyzedStroke(StrictModel):
+    fact_id: str
+    event_index: NonNegativeInt
+    player: Player
+    stroke_type: str
+    confidence: Probability
+    confidence_band: StrokeConfidenceBand
+
+
+class StrokePattern(StrictModel):
+    fact_id: str
+    name: StrokePatternName
+    supporting_fact_ids: Annotated[list[str], Field(min_length=2)]
+
+
+class RallyAnalysis(StrictModel):
+    segment_index: NonNegativeInt
+    reliable_stroke_count: NonNegativeInt
+    cautious_stroke_count: NonNegativeInt
+    excluded_stroke_count: NonNegativeInt
+    opening_observed_stroke: AnalyzedStroke | None
+    final_observed_stroke: AnalyzedStroke | None
+    notable_strokes: list[AnalyzedStroke]
+    patterns: list[StrokePattern]
+    warnings: list[str]
+
+
+class RallyFactsOutput(StrictModel):
+    rallies: list[ScoredRallyFact]
+
+
+class RallyAnalysesOutput(StrictModel):
+    analyses: list[RallyAnalysis]
+
+
+CommentaryStyle = Literal["neutral", "analytical", "excited", "concise"]
+
+
+class CommentaryPlan(StrictModel):
+    segment_index: NonNegativeInt
+    should_comment: bool
+    style: CommentaryStyle
+    focus: list[str]
+    max_sentences: Annotated[int, Field(ge=1, le=3)]
+    allowed_fact_ids: list[str]
+
+
+class GeneratedCommentary(StrictModel):
+    segment_index: NonNegativeInt
+    text: Annotated[str, Field(min_length=1, max_length=240)]
+    source_fact_ids: Annotated[list[str], Field(min_length=1)]
+
+
+class CommentaryPlansOutput(StrictModel):
+    plans: list[CommentaryPlan]
+
+
+class CommentaryOutput(StrictModel):
+    lines: list[GeneratedCommentary]

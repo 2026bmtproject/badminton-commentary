@@ -576,21 +576,27 @@ def run_show(args, ctx):
         elif key == ord(' '):
             playing = not playing
         elif key in (ord('d'), 83):        # → next
-            i += 1; playing = False
+            i += 1
+            playing = False
         elif key in (ord('a'), 81):        # ← prev
-            i -= 1; playing = False
+            i -= 1
+            playing = False
         elif key in (ord('e'), ord('.')):
-            i += 10; playing = False
+            i += 10
+            playing = False
         elif key in (ord('q'), ord(',')):
-            i -= 10; playing = False
+            i -= 10
+            playing = False
         elif key == ord('n'):              # 下一個擊球幀
             nxt = [h for h in hits_sorted if h > i]
             if nxt:
-                i = nxt[0]; playing = False
+                i = nxt[0]
+                playing = False
         elif key == ord('p'):              # 上一個擊球幀
             prv = [h for h in hits_sorted if h < i]
             if prv:
-                i = prv[-1]; playing = False
+                i = prv[-1]
+                playing = False
         elif key == ord('s'):
             out = f"frame_{i:06d}.png"
             cv2.imwrite(out, img)
