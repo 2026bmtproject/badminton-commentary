@@ -54,6 +54,69 @@ def make_cautious_stroke_fact() -> ScoredRallyFact:
     return scored
 
 
+def make_pattern_fact() -> ScoredRallyFact:
+    scored = make_scored_fact()
+    scored.fact.events = [
+        RallyFactEvent(
+            event_index=index,
+            frame=index * 10,
+            time_sec=index / 3,
+            player=player,
+            stroke_type=stroke_type,
+            stroke_confidence=0.9,
+        )
+        for index, player, stroke_type in (
+            (0, "a", "發球"),
+            (1, "b", "小球"),
+            (2, "a", "小球"),
+        )
+    ]
+    scored.fact.rally_length = 3
+    return scored
+
+
+def make_rear_front_pattern_fact() -> ScoredRallyFact:
+    scored = make_scored_fact()
+    scored.fact.events = [
+        RallyFactEvent(
+            event_index=index,
+            frame=index * 10,
+            time_sec=index / 3,
+            player=player,
+            stroke_type=stroke_type,
+            stroke_confidence=0.9,
+        )
+        for index, player, stroke_type in (
+            (0, "a", "高遠球"),
+            (1, "b", "小球"),
+            (2, "a", "小球"),
+        )
+    ]
+    scored.fact.rally_length = 3
+    return scored
+
+
+def make_diversity_pattern_fact() -> ScoredRallyFact:
+    scored = make_scored_fact()
+    scored.fact.events = [
+        RallyFactEvent(
+            event_index=index,
+            frame=index * 10,
+            time_sec=index / 3,
+            player=player,
+            stroke_type=stroke_type,
+            stroke_confidence=0.9,
+        )
+        for index, player, stroke_type in (
+            (0, "a", "平快球"),
+            (1, "b", "小球"),
+            (2, "a", "高遠球"),
+        )
+    ]
+    scored.fact.rally_length = 3
+    return scored
+
+
 def response(**overrides) -> str:
     payload = {
         "segment_index": 2,
@@ -180,6 +243,160 @@ def test_wrong_written_score_is_rejected():
     with pytest.raises(CommentaryGenerationError, match="score does not match"):
         generate_commentary(
             provider=FakeProvider(response=response(text="雙方目前戰成19比20。")),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_tactical_pattern_catalog_contains_meaning_and_support():
+    scored = make_pattern_fact()
+    pattern_id = "rally:2:pattern:serve_return_pattern"
+    provider = FakeProvider(
+        response=response(
+            text="雙方由發接發迅速銜接到第三拍。",
+            source_fact_ids=[pattern_id],
+        )
+    )
+
+    generated = generate_commentary(
+        provider=provider,
+        scored=scored,
+        plan=plan_commentary(scored),
+    )
+
+    catalog = json.loads(provider.calls[0].user_prompt)["fact_catalog"][pattern_id]
+    assert generated.source_fact_ids == [pattern_id]
+    assert catalog["commentary_hint"] == "發接發後連續銜接第三拍"
+    assert catalog["evidence_scope"] == "stroke_sequence_only"
+    assert list(catalog["supporting_strokes"]) == [
+        "rally:2:stroke:0",
+        "rally:2:stroke:1",
+        "rally:2:stroke:2",
+    ]
+
+
+@pytest.mark.parametrize("term", ["觀測球路", "短窗口", "後場類型"])
+def test_internal_schema_wording_is_rejected(term):
+    scored = make_rear_front_pattern_fact()
+    pattern_id = "rally:2:pattern:rear_court_stroke_to_front_court_stroke"
+
+    with pytest.raises(CommentaryGenerationError, match="internal schema wording"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(text=f"{term}轉為網前處理。", source_fact_ids=[pattern_id])
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_rear_front_pattern_cannot_claim_player_movement():
+    scored = make_rear_front_pattern_fact()
+    pattern_id = "rally:2:pattern:rear_court_stroke_to_front_court_stroke"
+
+    with pytest.raises(CommentaryGenerationError, match="movement or causal"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text="戴資穎從後場移動到網前。",
+                    source_fact_ids=[pattern_id],
+                )
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_stroke_diversity_cannot_claim_tempo_change():
+    scored = make_diversity_pattern_fact()
+    pattern_id = "rally:2:pattern:stroke_diversity"
+
+    with pytest.raises(CommentaryGenerationError, match="temporal variation"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text="雙方不斷改變攻防節奏。",
+                    source_fact_ids=[pattern_id],
+                )
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_available_pattern_cannot_be_replaced_by_stroke_listing():
+    scored = make_rear_front_pattern_fact()
+
+    with pytest.raises(CommentaryGenerationError, match="omits an available tactical"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text="戴資穎打出小球。",
+                    source_fact_ids=["rally:2:stroke:2"],
+                )
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_available_pattern_cannot_be_replaced_by_score_only():
+    scored = make_rear_front_pattern_fact()
+
+    with pytest.raises(CommentaryGenerationError, match="omits an available tactical"):
+        generate_commentary(
+            provider=FakeProvider(response=response()),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_low_importance_commentary_cannot_use_exclamation_mark():
+    scored = make_pattern_fact()
+
+    with pytest.raises(CommentaryGenerationError, match="exclamation emphasis"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text="雙方由發接發銜接第三拍！",
+                    source_fact_ids=["rally:2:pattern:serve_return_pattern"],
+                )
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+def test_high_importance_commentary_allows_at_most_one_exclamation_mark():
+    scored = make_pattern_fact()
+    scored.importance.score = 0.75
+
+    with pytest.raises(CommentaryGenerationError, match="exclamation emphasis"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text="發接發後銜接第三拍！球路變化精彩！",
+                    source_fact_ids=["rally:2:pattern:serve_return_pattern"],
+                )
+            ),
+            scored=scored,
+            plan=plan_commentary(scored),
+        )
+
+
+@pytest.mark.parametrize("causal_term", ["迫使", "導致", "造成", "靠著"])
+def test_pattern_cannot_add_unsupported_causality(causal_term):
+    scored = make_rear_front_pattern_fact()
+    pattern_id = "rally:2:pattern:rear_court_stroke_to_front_court_stroke"
+
+    with pytest.raises(CommentaryGenerationError, match="movement or causal"):
+        generate_commentary(
+            provider=FakeProvider(
+                response=response(
+                    text=f"後場球轉為網前處理，{causal_term}對手失去主動。",
+                    source_fact_ids=[pattern_id],
+                )
+            ),
             scored=scored,
             plan=plan_commentary(scored),
         )

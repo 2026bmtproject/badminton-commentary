@@ -11,9 +11,9 @@ ROOT = Path("fixtures/development/TTYvsASY")
 CLIPS_ROOT = ROOT / "selected_clips"
 GROUPS = ("seg0039-0043", "seg0052-0056", "seg0140-0144")
 PLAYER_MAPPINGS = {
-    "seg0039-0043": {"top": "b", "bottom": "a"},
-    "seg0052-0056": {"top": "a", "bottom": "b"},
-    "seg0140-0144": {"top": "a", "bottom": "b"},
+    "seg0039-0043": {"top": "a", "bottom": "b"},
+    "seg0052-0056": {"top": "b", "bottom": "a"},
+    "seg0140-0144": {"top": "b", "bottom": "a"},
 }
 
 

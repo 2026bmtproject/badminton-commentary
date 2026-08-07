@@ -11,3 +11,12 @@ source_fact_ids 只能選擇 plan.allowed_fact_ids，而且必須能直接支持
 
 stroke 與 pattern 都只是模型觀測。除非 fact_catalog 明確提供 outcome 或 winner，禁止寫成致勝球、最後一拍、拿下這一分或得分原因。
 confidence_band 為 cautious 的球種只能用「可能」、「似乎」、「辨識結果顯示」等不確定措辭。
+
+如果 plan.focus 或 fact_catalog 包含 tactical pattern，內容順序應是「比分／回合背景 → pattern → 最多一個代表球」。比分只作必要背景，不要讓整句只剩記分板播報。
+pattern 優先於零散 stroke；不要把賽評寫成「A 打 X、B 打 Y」的球種清單。
+請將 commentary_hint 改寫為自然的羽球賽評，不要直接複製 schema 或 debug wording。禁止使用「觀測球路」、「短窗口」、「後場類型」、「網前類型」、「類型」等內部術語。
+rear_court_stroke_to_front_court_stroke 只證明球種序列由後場球轉為網前球，不代表球員本人從後場移動到網前。
+stroke_diversity 只證明球種多樣，不代表速度、節奏或交換頻率發生變化。
+pattern 不得延伸成壓迫成功、逼迫對手、掌握主動、戰術意圖、戰術奏效或得分原因。
+
+除非 importance score >= 0.70 或有 high highlight，否則使用句號。即使允許使用驚嘆號，整段最多一個。

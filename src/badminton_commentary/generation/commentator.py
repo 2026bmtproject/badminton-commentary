@@ -17,7 +17,7 @@ from badminton_commentary.schemas import (
 from .validator import CommentaryValidationError, validate_commentary
 
 
-PROMPT_VERSION = "commentator-v2"
+PROMPT_VERSION = "commentator-v3"
 SYSTEM_PROMPT_PATH = Path(__file__).parents[1] / "prompts" / "commentator.txt"
 
 
@@ -45,15 +45,27 @@ def _fact_catalog(
                 "confidence": event.stroke_confidence,
             }
     for pattern in analysis.patterns:
+        candidate_by_id = {
+            stroke.fact_id: stroke for stroke in analysis.candidate_strokes
+        }
         supporting = {
-            stroke.fact_id: stroke.model_dump()
-            for stroke in analysis.notable_strokes
-            if stroke.fact_id in pattern.supporting_fact_ids
+            fact_id: candidate_by_id[fact_id].model_dump()
+            for fact_id in pattern.supporting_fact_ids
+            if fact_id in candidate_by_id
         }
         catalog[pattern.fact_id] = {
             "pattern": pattern.name,
+            "salience": pattern.salience,
+            "commentary_hint": pattern.commentary_hint,
+            "evidence_scope": "stroke_sequence_only",
+            "does_not_imply": [
+                "player_movement",
+                "tactical_intent",
+                "causality",
+                "rally_outcome",
+            ],
             "supporting_fact_ids": pattern.supporting_fact_ids,
-            "supporting_notable_strokes": supporting,
+            "supporting_strokes": supporting,
         }
     for stroke in analysis.notable_strokes:
         catalog[stroke.fact_id] = stroke.model_dump()

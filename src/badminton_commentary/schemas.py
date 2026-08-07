@@ -117,10 +117,11 @@ class ScoredRallyFact(StrictModel):
 
 StrokeConfidenceBand = Literal["reliable", "cautious"]
 StrokePatternName = Literal[
-    "net_exchange",
-    "attack_sequence",
-    "clear_exchange",
-    "varied_strokes",
+    "serve_return_pattern",
+    "lift_to_attack_transition",
+    "sustained_attack",
+    "rear_court_stroke_to_front_court_stroke",
+    "stroke_diversity",
 ]
 
 
@@ -131,12 +132,16 @@ class AnalyzedStroke(StrictModel):
     stroke_type: str
     confidence: Probability
     confidence_band: StrokeConfidenceBand
+    salience: Probability
 
 
 class StrokePattern(StrictModel):
     fact_id: str
     name: StrokePatternName
+    salience: Probability
+    commentary_hint: str
     supporting_fact_ids: Annotated[list[str], Field(min_length=2)]
+    representative_fact_id: str | None
 
 
 class RallyAnalysis(StrictModel):
@@ -146,6 +151,7 @@ class RallyAnalysis(StrictModel):
     excluded_stroke_count: NonNegativeInt
     opening_observed_stroke: AnalyzedStroke | None
     final_observed_stroke: AnalyzedStroke | None
+    candidate_strokes: list[AnalyzedStroke]
     notable_strokes: list[AnalyzedStroke]
     patterns: list[StrokePattern]
     warnings: list[str]

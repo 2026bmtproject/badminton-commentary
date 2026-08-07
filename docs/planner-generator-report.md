@@ -102,8 +102,20 @@ Planner 前新增一層確定性的 Rally Analyzer。它不呼叫 LLM，也不�
 Analyzer 記錄 `opening_observed_stroke` 與 `final_observed_stroke`。後者只代表最後一筆
 可用的模型觀測，不代表最後一拍或致勝球。
 
-第一版 pattern 包含 `net_exchange`、`attack_sequence`、`clear_exchange` 與
-`varied_strokes`。每個 pattern 都保存 `supporting_fact_ids`，可以回查原始 stroke。
+高階 pattern 包含：
+
+- `serve_return_pattern`：可靠的發球、接發球與第三拍序列。
+- `lift_to_attack_transition`：挑球／高遠球後由對手銜接殺球／撲球。
+- `sustained_attack`：同一球員在五個 event 的窗口內兩次使用殺球／撲球。
+- `rear_court_stroke_to_front_court_stroke`：同一球員的球種序列由後場球轉為小球／撲球；不表示本人移動。
+- `stroke_diversity`：五個可靠觀測內出現至少三類球路；不表示節奏或速度變化。
+
+每個 pattern 都保存 `supporting_fact_ids`，可以回查原始 stroke。它們描述序列，
+不宣稱戰術成功、逼迫對手或直接造成得分。
+
+Stroke salience 由球種基礎權重與 confidence 組成：殺球、撲球最高，接著是平快球、
+切球、小球；普通發球最低。Pattern 另有獨立 salience，Planner 先依 pattern salience
+排序，再選一個相關代表球，避免輸出退化成球種清單。
 
 ### 4.2 Importance 門檻
 
@@ -140,8 +152,9 @@ Planner 只為實際存在的資料產生 ID：
 - 可追溯 pattern：`rally:{segment}:pattern:{pattern_name}`
 - 存在 highlight：`rally:{segment}:highlight`
 
-Planner 依 style 最多選擇 1、2 或 3 個 notable strokes，以及最多 1 或 2 個 pattern，
-不再把整段所有 stroke 都交給 LLM。缺少資料時，相應 ID 不會出現在 allowlist。
+Planner 依 style 最多選擇 1 或 2 個 pattern，再補最多 1 個與 pattern 相關的代表球。
+普通發球 salience 最低，除非它是 `serve_return_pattern` 的必要證據，否則不主動選用。
+Planner 不再把整段所有 stroke 都交給 LLM。缺少資料時，相應 ID 不會出現在 allowlist。
 
 ## 5. Generator 演算法
 
@@ -165,7 +178,7 @@ Generator 不把任意的整場資料交給 LLM，而是把 allowlist 對應的�
 
 送往 provider 的 user prompt 包含：
 
-- `prompt_version`: `commentator-v1`
+- `prompt_version`: `commentator-v3`
 - `players`: `a/b` 到顯示名稱的對應
 - `plan`: 已驗證的 CommentaryPlan
 - `fact_catalog`: allowlist 允許的事實
@@ -184,6 +197,9 @@ Provider 回傳後依序檢查：
 5. 以 `。！？!?` 分句後不得超過 `max_sentences`。
 6. 沒有 outcome fact 時，拒絕「致勝」、「拿下這一分」、「得分」等結論。
 7. 引用 cautious stroke 時，文字必須包含不確定措辭。
+8. 有 pattern 時必須引用 pattern，且最多補一個代表 stroke。
+9. 禁止內部 schema wording、球員移動推論與未支持的因果關係。
+10. 非高 importance／highlight 不得使用驚嘆號；任何輸出最多一個驚嘆號。
 
 任一檢查失敗都會拋出 `CommentaryGenerationError`，不會把未驗證文字寫成正式結果。
 

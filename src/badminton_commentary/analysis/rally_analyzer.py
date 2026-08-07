@@ -13,9 +13,40 @@ from badminton_commentary.schemas import (
 
 RELIABLE_CONFIDENCE = 0.70
 CAUTIOUS_CONFIDENCE = 0.50
-NET_STROKES = {"小球", "撲球"}
 ATTACK_STROKES = {"殺球", "撲球"}
-CLEAR_STROKES = {"高遠球"}
+LIFT_STROKES = {"挑球", "高遠球"}
+REAR_STROKES = {"高遠球", "殺球", "切球"}
+FRONT_STROKES = {"小球", "撲球"}
+STROKE_CATEGORIES = {
+    "發球": "serve",
+    "高遠球": "rear_court",
+    "挑球": "rear_court",
+    "殺球": "attack",
+    "撲球": "attack",
+    "切球": "placement",
+    "小球": "front_court",
+    "平快球": "drive",
+}
+STROKE_SALIENCE = {
+    "發球": 0.10,
+    "殺球": 1.00,
+    "撲球": 0.95,
+    "平快球": 0.80,
+    "切球": 0.75,
+    "小球": 0.70,
+    "挑球": 0.55,
+    "高遠球": 0.50,
+}
+PATTERN_METADATA = {
+    "serve_return_pattern": (0.55, "發接發後連續銜接第三拍"),
+    "lift_to_attack_transition": (0.95, "高遠球或挑球後緊接進攻球"),
+    "sustained_attack": (1.00, "同一球員在數拍內兩度使用殺球或撲球"),
+    "rear_court_stroke_to_front_court_stroke": (
+        0.85,
+        "球路從後場球轉為網前處理",
+    ),
+    "stroke_diversity": (0.75, "雙方交替運用至少三類不同球路"),
+}
 
 
 def _analyzed_stroke(fact: RallyFact, event: RallyFactEvent) -> AnalyzedStroke | None:
@@ -35,22 +66,82 @@ def _analyzed_stroke(fact: RallyFact, event: RallyFactEvent) -> AnalyzedStroke |
         stroke_type=event.stroke_type,
         confidence=event.stroke_confidence,
         confidence_band=band,
+        salience=min(
+            STROKE_SALIENCE.get(event.stroke_type, 0.25)
+            * (0.8 + 0.2 * event.stroke_confidence),
+            1.0,
+        ),
     )
 
 
-def _consecutive_pattern(
-    strokes: list[AnalyzedStroke],
-    *,
-    accepted_types: set[str],
-) -> list[AnalyzedStroke] | None:
+def _serve_return_pattern(strokes: list[AnalyzedStroke]) -> list[AnalyzedStroke] | None:
+    if len(strokes) < 3:
+        return None
+    first, second, third = strokes[:3]
+    if (
+        first.stroke_type == "發球"
+        and second.event_index == first.event_index + 1
+        and third.event_index == second.event_index + 1
+        and first.player == third.player
+        and first.player != second.player
+    ):
+        return [first, second, third]
+    return None
+
+
+def _lift_to_attack(strokes: list[AnalyzedStroke]) -> list[AnalyzedStroke] | None:
     for first, second in zip(strokes, strokes[1:]):
         if (
-            first.stroke_type in accepted_types
-            and second.stroke_type in accepted_types
+            first.stroke_type in LIFT_STROKES
+            and second.stroke_type in ATTACK_STROKES
             and first.player != second.player
             and second.event_index == first.event_index + 1
         ):
             return [first, second]
+    return None
+
+
+def _sustained_attack(strokes: list[AnalyzedStroke]) -> list[AnalyzedStroke] | None:
+    for index, first in enumerate(strokes):
+        if first.stroke_type not in ATTACK_STROKES:
+            continue
+        for second in strokes[index + 1 :]:
+            if second.event_index - first.event_index > 5:
+                break
+            if (
+                second.player == first.player
+                and second.stroke_type in ATTACK_STROKES
+            ):
+                return [first, second]
+    return None
+
+
+def _rear_stroke_to_front_stroke(
+    strokes: list[AnalyzedStroke],
+) -> list[AnalyzedStroke] | None:
+    for index, first in enumerate(strokes):
+        if first.stroke_type not in REAR_STROKES:
+            continue
+        for second in strokes[index + 1 :]:
+            if second.event_index - first.event_index > 6:
+                break
+            if second.player == first.player and second.stroke_type in FRONT_STROKES:
+                return [first, second]
+    return None
+
+
+def _stroke_diversity(strokes: list[AnalyzedStroke]) -> list[AnalyzedStroke] | None:
+    for start in range(len(strokes)):
+        window = strokes[start : start + 5]
+        if len(window) < 3 or window[-1].event_index - window[0].event_index > 8:
+            continue
+        category_examples: dict[str, AnalyzedStroke] = {}
+        for stroke in window:
+            category = STROKE_CATEGORIES.get(stroke.stroke_type)
+            if category is not None:
+                category_examples.setdefault(category, stroke)
+        if len(category_examples) >= 3:
+            return list(category_examples.values())
     return None
 
 
@@ -61,10 +152,21 @@ def _pattern(
     strokes: Iterable[AnalyzedStroke],
 ) -> StrokePattern:
     support = list(strokes)
+    salience, commentary_hint = PATTERN_METADATA[name]
+    representative = max(
+        (stroke for stroke in support if stroke.stroke_type != "發球"),
+        key=lambda stroke: stroke.salience,
+        default=None,
+    )
     return StrokePattern(
         fact_id=f"rally:{fact.segment_index}:pattern:{name}",
         name=name,
+        salience=salience,
+        commentary_hint=commentary_hint,
         supporting_fact_ids=[stroke.fact_id for stroke in support],
+        representative_fact_id=(
+            representative.fact_id if representative is not None else None
+        ),
     )
 
 
@@ -84,43 +186,29 @@ def analyze_rally(fact: RallyFact) -> RallyAnalysis:
     excluded_count = recognized_count - len(usable)
 
     patterns: list[StrokePattern] = []
-    net = _consecutive_pattern(reliable, accepted_types=NET_STROKES)
-    if net:
-        patterns.append(_pattern(fact, name="net_exchange", strokes=net))
-    attack = _consecutive_pattern(reliable, accepted_types=ATTACK_STROKES)
-    if attack:
-        patterns.append(_pattern(fact, name="attack_sequence", strokes=attack))
-    clear = _consecutive_pattern(reliable, accepted_types=CLEAR_STROKES)
-    if clear:
-        patterns.append(_pattern(fact, name="clear_exchange", strokes=clear))
-    varied_types: dict[str, AnalyzedStroke] = {}
-    for stroke in reliable:
-        varied_types.setdefault(stroke.stroke_type, stroke)
-    if len(varied_types) >= 4:
-        patterns.append(
-            _pattern(
-                fact,
-                name="varied_strokes",
-                strokes=list(varied_types.values())[:4],
-            )
-        )
-
-    notable: list[AnalyzedStroke] = []
-    for candidate in (
-        reliable[0] if reliable else None,
-        max(
-            (stroke for stroke in reliable if stroke.stroke_type in ATTACK_STROKES),
-            key=lambda stroke: stroke.confidence,
-            default=None,
+    pattern_candidates = (
+        ("serve_return_pattern", _serve_return_pattern(reliable)),
+        ("lift_to_attack_transition", _lift_to_attack(reliable)),
+        ("sustained_attack", _sustained_attack(reliable)),
+        (
+            "rear_court_stroke_to_front_court_stroke",
+            _rear_stroke_to_front_stroke(reliable),
         ),
-        reliable[-1] if reliable else None,
-    ):
-        if candidate is not None and candidate.fact_id not in {
-            stroke.fact_id for stroke in notable
-        }:
-            notable.append(candidate)
-    if not notable and cautious:
-        notable.append(max(cautious, key=lambda stroke: stroke.confidence))
+        ("stroke_diversity", _stroke_diversity(reliable)),
+    )
+    for name, supporting_strokes in pattern_candidates:
+        if supporting_strokes:
+            patterns.append(
+                _pattern(fact, name=name, strokes=supporting_strokes)
+            )
+
+    patterns.sort(key=lambda pattern: pattern.salience, reverse=True)
+    notable_pool = reliable or cautious
+    notable = sorted(
+        (stroke for stroke in notable_pool if stroke.stroke_type != "發球"),
+        key=lambda stroke: (stroke.salience, stroke.confidence),
+        reverse=True,
+    )[:5]
 
     warnings = []
     if cautious:
@@ -137,6 +225,7 @@ def analyze_rally(fact: RallyFact) -> RallyAnalysis:
         excluded_stroke_count=excluded_count,
         opening_observed_stroke=usable[0] if usable else None,
         final_observed_stroke=usable[-1] if usable else None,
+        candidate_strokes=usable,
         notable_strokes=notable,
         patterns=patterns,
         warnings=warnings,

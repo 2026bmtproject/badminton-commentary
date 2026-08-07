@@ -59,3 +59,70 @@ def test_plan_only_allows_fact_ids_that_exist():
         "rally:3:score",
         "rally:3:stroke:7",
     ]
+
+
+def test_ordinary_serve_loses_to_more_salient_stroke():
+    scored = make_scored_fact(0.5)
+    scored.fact.events = [
+        RallyFactEvent(
+            event_index=0,
+            frame=10,
+            time_sec=0.3,
+            player="a",
+            stroke_type="發球",
+            stroke_confidence=0.95,
+        ),
+        RallyFactEvent(
+            event_index=1,
+            frame=20,
+            time_sec=0.6,
+            player="b",
+            stroke_type="殺球",
+            stroke_confidence=0.8,
+        ),
+    ]
+    scored.fact.rally_length = 2
+
+    plan = plan_commentary(scored)
+
+    assert "rally:3:stroke:0" not in plan.allowed_fact_ids
+    assert "rally:3:stroke:1" in plan.allowed_fact_ids
+
+
+def test_pattern_precedes_one_representative_stroke():
+    scored = make_scored_fact(0.5)
+    scored.fact.events = [
+        RallyFactEvent(
+            event_index=0,
+            frame=10,
+            time_sec=0.3,
+            player="a",
+            stroke_type="高遠球",
+            stroke_confidence=0.9,
+        ),
+        RallyFactEvent(
+            event_index=1,
+            frame=20,
+            time_sec=0.6,
+            player="b",
+            stroke_type="殺球",
+            stroke_confidence=0.9,
+        ),
+        RallyFactEvent(
+            event_index=2,
+            frame=30,
+            time_sec=1.0,
+            player="a",
+            stroke_type="平快球",
+            stroke_confidence=0.9,
+        ),
+    ]
+    scored.fact.rally_length = 3
+
+    plan = plan_commentary(scored)
+
+    pattern_id = "rally:3:pattern:lift_to_attack_transition"
+    assert plan.allowed_fact_ids.index(pattern_id) < plan.allowed_fact_ids.index(
+        "rally:3:stroke:1"
+    )
+    assert len([item for item in plan.allowed_fact_ids if ":stroke:" in item]) == 1

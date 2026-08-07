@@ -6,8 +6,10 @@ import argparse
 import json
 from pathlib import Path
 
+from badminton_commentary.analysis.rally_analyzer import analyze_rally
 from badminton_commentary.config import load_config
 from badminton_commentary.generation.batch import generate_commentaries
+from badminton_commentary.generation.planner import plan_commentary
 from badminton_commentary.providers import FakeProvider, GeminiProvider, LLMProvider
 from badminton_commentary.schemas import (
     CommentaryOutput,
@@ -24,8 +26,22 @@ PLAYER_NAMES = {"a": "戴資穎", "b": "安洗瑩"}
 
 def fake_response(scored: ScoredRallyFact) -> str:
     fact = scored.fact
-    fact_id = f"rally:{fact.segment_index}:score"
-    text = f"戴資穎與安洗瑩目前戰成{fact.score.a}比{fact.score.b}。"
+    analysis = analyze_rally(fact)
+    plan = plan_commentary(scored, analysis)
+    selected_pattern = next(
+        (
+            pattern
+            for pattern in analysis.patterns
+            if pattern.fact_id in plan.allowed_fact_ids
+        ),
+        None,
+    )
+    if selected_pattern is not None:
+        fact_id = selected_pattern.fact_id
+        text = f"這段來回中，{selected_pattern.commentary_hint}。"
+    else:
+        fact_id = f"rally:{fact.segment_index}:score"
+        text = f"戴資穎與安洗瑩目前戰成{fact.score.a}比{fact.score.b}。"
     return GeneratedCommentary(
         segment_index=fact.segment_index,
         text=text,

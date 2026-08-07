@@ -50,27 +50,39 @@ def test_confidence_bands_and_low_confidence_exclusion():
     ]
 
 
-def test_patterns_keep_supporting_fact_ids():
+def test_tactical_patterns_keep_supporting_fact_ids():
     analysis = analyze_rally(
         make_fact(
             [
-                event(0, "a", "小球", 0.9),
-                event(1, "b", "撲球", 0.8),
+                event(0, "a", "發球", 0.9),
+                event(1, "b", "高遠球", 0.8),
                 event(2, "a", "殺球", 0.85),
-                event(3, "b", "高遠球", 0.9),
+                event(3, "b", "小球", 0.9),
+                event(4, "a", "撲球", 0.88),
             ]
         )
     )
 
     assert [pattern.name for pattern in analysis.patterns] == [
-        "net_exchange",
-        "attack_sequence",
-        "varied_strokes",
+        "sustained_attack",
+        "lift_to_attack_transition",
+        "rear_court_stroke_to_front_court_stroke",
+        "stroke_diversity",
+        "serve_return_pattern",
     ]
-    assert analysis.patterns[0].supporting_fact_ids == [
+    serve_pattern = next(
+        pattern
+        for pattern in analysis.patterns
+        if pattern.name == "serve_return_pattern"
+    )
+    assert serve_pattern.supporting_fact_ids == [
         "rally:4:stroke:0",
         "rally:4:stroke:1",
+        "rally:4:stroke:2",
     ]
+    assert serve_pattern.salience < analysis.patterns[0].salience
+    assert analysis.notable_strokes[0].stroke_type == "殺球"
+    assert all(stroke.stroke_type != "發球" for stroke in analysis.notable_strokes)
 
 
 def test_final_observed_stroke_does_not_claim_a_winner():

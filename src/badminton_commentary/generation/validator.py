@@ -38,6 +38,45 @@ def validate_commentary(
             f"generated commentary exceeds {plan.max_sentences} sentences"
         )
 
+    exclamation_count = generated.text.count("!") + generated.text.count("！")
+    high_emotion_allowed = (
+        scored.importance.score >= 0.70
+        or (
+            scored.fact.highlight_score is not None
+            and scored.fact.highlight_score >= 0.75
+        )
+    )
+    if exclamation_count > 1 or (exclamation_count and not high_emotion_allowed):
+        raise CommentaryValidationError(
+            "generated commentary uses unsupported exclamation emphasis"
+        )
+
+    internal_terms = ("觀測球路", "短窗口", "後場類型", "網前類型", "類型")
+    if any(term in generated.text for term in internal_terms):
+        raise CommentaryValidationError(
+            "generated commentary exposes internal schema wording"
+        )
+
+    unsupported_inferences = (
+        "移動到網前",
+        "跑到網前",
+        "從後場移動",
+        "前移到網前",
+        "逼迫",
+        "迫使",
+        "掌握主動",
+        "取得主動",
+        "戰術奏效",
+        "導致",
+        "造成",
+        "因而",
+        "靠著",
+    )
+    if any(term in generated.text for term in unsupported_inferences):
+        raise CommentaryValidationError(
+            "generated commentary makes an unsupported movement or causal inference"
+        )
+
     unsupported_outcome_claims = (
         "致勝",
         "拿下這一分",
@@ -50,6 +89,31 @@ def validate_commentary(
         raise CommentaryValidationError(
             "generated commentary makes an unsupported rally outcome claim"
         )
+
+    cited_patterns = {
+        fact_id
+        for fact_id in generated.source_fact_ids
+        if ":pattern:" in fact_id
+    }
+    cited_strokes = {
+        fact_id for fact_id in generated.source_fact_ids if ":stroke:" in fact_id
+    }
+    planned_patterns = {
+        fact_id for fact_id in plan.allowed_fact_ids if ":pattern:" in fact_id
+    }
+    if planned_patterns and not cited_patterns:
+        raise CommentaryValidationError(
+            "generated commentary omits an available tactical pattern"
+        )
+    if cited_patterns and len(cited_strokes) > 1:
+        raise CommentaryValidationError(
+            "generated commentary lists too many strokes beside a pattern"
+        )
+    if any(fact_id.endswith(":pattern:stroke_diversity") for fact_id in cited_patterns):
+        if "節奏" in generated.text or "快慢" in generated.text:
+            raise CommentaryValidationError(
+                "stroke diversity commentary overclaims temporal variation"
+            )
 
     expected_score = (scored.fact.score.a, scored.fact.score.b)
     written_scores = [
