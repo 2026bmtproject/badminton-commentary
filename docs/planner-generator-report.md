@@ -1,5 +1,8 @@
 # Planner 與 Generator 實作報告
 
+> 這是早期 rally-only 里程碑的設計紀錄。正式單 rally API 與目前目錄結構以根目錄
+> README 及 `RallyCommentaryService` 為準。
+
 ## 1. 目標與完成範圍
 
 本里程碑將確定性的 Rally Facts 轉為可驗證的繁體中文賽評，完成：
@@ -20,6 +23,8 @@
 ```text
 src/badminton_commentary/
 ├── schemas.py
+├── services/
+│   └── rally_commentary.py
 ├── analysis/
 │   └── rally_analyzer.py
 ├── generation/
@@ -31,14 +36,14 @@ src/badminton_commentary/
 └── prompts/
     └── commentator.txt
 
-scripts/
-├── build_ttyvsasy_facts.py
-└── generate_ttyvsasy_commentary.py
+experiments/ttyvsasy/scripts/
+├── build_facts.py
+└── generate_commentary.py
 
 tests/
-├── test_planner.py
-├── test_commentator.py
-└── test_generation_pipeline.py
+├── unit/
+├── integration/
+└── regression/
 ```
 
 `planner.py` 是純 Python 規則，不呼叫 LLM。`commentator.py` 是單一 rally 的
@@ -220,13 +225,13 @@ Fake 模式為每個 rally 建立穩定 JSON，只引用 score fact。用途是�
 不是評估自然語言品質。
 
 ```powershell
-uv run python .\scripts\build_ttyvsasy_facts.py
-uv run python .\scripts\generate_ttyvsasy_commentary.py `
+uv run python .\experiments\ttyvsasy\scripts\build_facts.py
+uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
   --provider fake `
   --config .\config.yaml.example
 ```
 
-輸出位於每組 clip 的 `commentary_fake.json`。
+輸出位於 `outputs/ttyvsasy/{group}/commentary_fake.json`。
 
 ### 6.2 Gemini Provider
 
@@ -235,7 +240,7 @@ uv run python .\scripts\generate_ttyvsasy_commentary.py `
 ```powershell
 $env:GEMINI_API_KEY = "你的 API key"
 
-uv run python .\scripts\generate_ttyvsasy_commentary.py `
+uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
   --provider gemini `
   --config .\config.yaml
 ```

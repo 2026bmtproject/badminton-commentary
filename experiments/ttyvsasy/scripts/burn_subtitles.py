@@ -12,7 +12,10 @@ from badminton_commentary.schemas import (
 from badminton_commentary.subtitles import build_subtitle_cues, render_ass
 
 
-DEFAULT_ROOT = Path("fixtures/development/TTYvsASY/selected_clips")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+EXPERIMENT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORKSPACE_ROOT = EXPERIMENT_ROOT / "workspace" / "selected_clips"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "outputs" / "ttyvsasy"
 
 
 def _source_video(group_dir: Path) -> Path:
@@ -34,7 +37,8 @@ def _ffmpeg_filter_path(path: Path) -> str:
 
 
 def process_group(
-    group_dir: Path,
+    workspace_group_dir: Path,
+    output_group_dir: Path,
     *,
     provider: str,
     event_duration: float,
@@ -47,8 +51,8 @@ def process_group(
     subtitles_only: bool,
     overwrite: bool,
 ) -> tuple[Path, Path | None]:
-    commentary_path = group_dir / f"commentary_{provider}_event_driven.json"
-    segments_path = group_dir / "commentary_input" / "segments.json"
+    commentary_path = output_group_dir / f"commentary_{provider}_event_driven.json"
+    segments_path = workspace_group_dir / "commentary_input" / "segments.json"
     if not commentary_path.is_file():
         raise FileNotFoundError(f"commentary file not found: {commentary_path}")
     if not segments_path.is_file():
@@ -67,7 +71,7 @@ def process_group(
         summary_duration=summary_duration,
     )
 
-    subtitle_dir = group_dir / "subtitles"
+    subtitle_dir = output_group_dir / "subtitles"
     subtitle_dir.mkdir(parents=True, exist_ok=True)
     subtitle_path = subtitle_dir / f"commentary_{provider}_event_driven.ass"
     if subtitle_path.exists() and not overwrite:
@@ -87,8 +91,10 @@ def process_group(
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise RuntimeError("ffmpeg was not found on PATH")
-    source_video = _source_video(group_dir)
-    output_video = source_video.with_name(
+    source_video = _source_video(workspace_group_dir)
+    output_video_dir = output_group_dir / "video"
+    output_video_dir.mkdir(parents=True, exist_ok=True)
+    output_video = output_video_dir / (
         f"{source_video.stem}_commentary_{provider}.mp4"
     )
     if output_video.exists() and not overwrite:
@@ -121,7 +127,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create ASS subtitles and burn event-driven commentary into clips."
     )
-    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument(
+        "--workspace-root",
+        type=Path,
+        default=DEFAULT_WORKSPACE_ROOT,
+    )
+    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--provider", choices=("fake", "gemini"), default="gemini")
     parser.add_argument(
         "--group",
@@ -142,17 +153,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    root = args.root.resolve()
-    groups = args.group or sorted(path.name for path in root.iterdir() if path.is_dir())
+    workspace_root = args.workspace_root.resolve()
+    output_root = args.output_root.resolve()
+    groups = args.group or sorted(
+        path.name for path in workspace_root.iterdir() if path.is_dir()
+    )
     if not groups:
-        raise ValueError(f"no clip groups found under {root}")
+        raise ValueError(f"no clip groups found under {workspace_root}")
 
     for group in groups:
-        group_dir = root / group
-        if not group_dir.is_dir():
-            raise FileNotFoundError(f"clip group not found: {group_dir}")
+        workspace_group_dir = workspace_root / group
+        if not workspace_group_dir.is_dir():
+            raise FileNotFoundError(f"clip group not found: {workspace_group_dir}")
+        output_group_dir = output_root / group
+        output_group_dir.mkdir(parents=True, exist_ok=True)
         subtitle_path, output_video = process_group(
-            group_dir,
+            workspace_group_dir,
+            output_group_dir,
             provider=args.provider,
             event_duration=args.event_duration,
             summary_duration=args.summary_duration,

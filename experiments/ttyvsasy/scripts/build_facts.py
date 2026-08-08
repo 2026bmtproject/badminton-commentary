@@ -21,7 +21,10 @@ from badminton_commentary.schemas import (
 )
 
 
-CLIPS_ROOT = Path("fixtures/development/TTYvsASY/selected_clips")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+EXPERIMENT_ROOT = Path(__file__).resolve().parents[1]
+CLIPS_ROOT = EXPERIMENT_ROOT / "workspace" / "selected_clips"
+OUTPUTS_ROOT = REPO_ROOT / "outputs" / "ttyvsasy"
 GROUPS = ("seg0039-0043", "seg0052-0056", "seg0140-0144")
 
 
@@ -49,7 +52,9 @@ def build_clip(group: str) -> RallyFactsOutput:
 def main() -> None:
     for group in GROUPS:
         output = build_clip(group)
-        output_path = CLIPS_ROOT / group / "rally_facts.json"
+        output_root = OUTPUTS_ROOT / group
+        output_root.mkdir(parents=True, exist_ok=True)
+        output_path = output_root / "rally_facts.json"
         output_path.write_text(
             output.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
@@ -57,7 +62,7 @@ def main() -> None:
         analyses = RallyAnalysesOutput(
             analyses=[analyze_rally(scored.fact) for scored in output.rallies]
         )
-        (CLIPS_ROOT / group / "rally_analyses.json").write_text(
+        (output_root / "rally_analyses.json").write_text(
             analyses.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
         )
@@ -67,7 +72,7 @@ def main() -> None:
                 for scored, analysis in zip(output.rallies, analyses.analyses)
             ]
         )
-        (CLIPS_ROOT / group / "commentary_plans.json").write_text(
+        (output_root / "commentary_plans.json").write_text(
             plans.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
         )

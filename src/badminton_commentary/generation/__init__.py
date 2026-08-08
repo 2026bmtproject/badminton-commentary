@@ -1,6 +1,9 @@
 from .batch import generate_commentaries
 from .commentator import CommentaryGenerationError, generate_commentary
-from .event_batch import generate_event_driven_commentary
+from .event_batch import (
+    generate_batched_event_driven_commentary,
+    generate_event_driven_commentary,
+)
 from .event_commentator import (
     StrokeCommentaryGenerationError,
     generate_stroke_commentary,
@@ -14,6 +17,7 @@ __all__ = [
     "CommentaryValidationError",
     "generate_commentaries",
     "generate_commentary",
+    "generate_batched_event_driven_commentary",
     "generate_event_driven_commentary",
     "generate_stroke_commentary",
     "plan_commentary",

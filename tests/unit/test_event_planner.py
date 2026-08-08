@@ -60,3 +60,18 @@ def test_skipped_event_plan_has_no_allowed_facts():
 
     assert plan.should_comment is False
     assert plan.allowed_fact_ids == []
+
+
+def test_low_importance_reduces_ordinary_event_density():
+    ordinary = fact()
+    ordinary.events = ordinary.events[:1]
+    analysis = analyze_stroke_events(ordinary)[0]
+
+    default_plan = plan_stroke_commentary(analysis)
+    low_importance_plan = plan_stroke_commentary(
+        analysis,
+        importance_score=0.1,
+    )
+
+    assert default_plan.should_comment is True
+    assert low_importance_plan.should_comment is False

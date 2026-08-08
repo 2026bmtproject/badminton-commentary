@@ -7,7 +7,8 @@ import shutil
 from pathlib import Path
 
 
-ROOT = Path("fixtures/development/TTYvsASY")
+EXPERIMENT_ROOT = Path(__file__).resolve().parents[1]
+ROOT = EXPERIMENT_ROOT / "workspace"
 CLIPS_ROOT = ROOT / "selected_clips"
 GROUPS = ("seg0039-0043", "seg0052-0056", "seg0140-0144")
 PLAYER_MAPPINGS = {
@@ -51,7 +52,6 @@ def split_group(
     source_scores: dict,
     source_events: dict,
     source_strokes: dict,
-    source_pose: dict,
     source_shuttle: dict,
 ) -> None:
     clip_root = CLIPS_ROOT / group
@@ -149,14 +149,6 @@ def split_group(
         {"strokes": commentary_strokes},
     )
 
-    pose_payload = dict(source_pose)
-    pose_payload["frames"] = [
-        localized
-        for item in source_pose["frames"]
-        if (localized := localize_item(item, mappings)) is not None
-    ]
-    write_json(output_root / "pose" / "pose.json", pose_payload)
-
     shuttle_payload = dict(source_shuttle)
     shuttle_payload["points"] = [
         localized
@@ -178,7 +170,6 @@ def main() -> None:
         "source_strokes": load_json(
             stages / "stroke_classification" / "strokes.json"
         ),
-        "source_pose": load_json(stages / "pose" / "pose.json"),
         "source_shuttle": load_json(stages / "shuttle_tracking" / "shuttle.json"),
     }
     for group in GROUPS:

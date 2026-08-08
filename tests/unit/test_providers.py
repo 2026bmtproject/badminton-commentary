@@ -6,6 +6,7 @@ from badminton_commentary.config import GeminiConfig
 from badminton_commentary.providers.base import LLMProvider, ProviderError
 from badminton_commentary.providers.fake import FakeProvider, PromptCall
 from badminton_commentary.providers.gemini import GeminiProvider
+from badminton_commentary.providers.timed import TimedProvider, TimingStats
 
 
 class StubModels:
@@ -40,6 +41,43 @@ def test_fake_provider_satisfies_protocol():
 
     assert isinstance(provider, LLMProvider)
     assert provider.generate(system_prompt="s", user_prompt="u") == "stable"
+
+
+def test_timed_provider_records_successful_call_duration():
+    stats = TimingStats()
+    clock_values = iter((10.0, 12.5))
+    provider = TimedProvider(
+        FakeProvider(response="ok"),
+        label="group/rally:0/fake",
+        stats=stats,
+        clock=lambda: next(clock_values),
+    )
+
+    assert provider.generate(system_prompt="system", user_prompt="user") == "ok"
+    assert stats.call_count == 1
+    assert stats.total_seconds == 2.5
+    assert stats.records[0].succeeded is True
+
+
+def test_timed_provider_records_failed_call_duration():
+    class FailingProvider:
+        def generate(self, *, system_prompt: str, user_prompt: str) -> str:
+            raise ProviderError("failed")
+
+    stats = TimingStats()
+    clock_values = iter((3.0, 4.25))
+    provider = TimedProvider(
+        FailingProvider(),
+        label="group/rally:1/gemini",
+        stats=stats,
+        clock=lambda: next(clock_values),
+    )
+
+    with pytest.raises(ProviderError, match="failed"):
+        provider.generate(system_prompt="system", user_prompt="user")
+
+    assert stats.total_seconds == 1.25
+    assert stats.records[0].succeeded is False
 
 
 def test_gemini_provider_calls_injected_client():

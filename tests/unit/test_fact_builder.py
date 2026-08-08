@@ -13,7 +13,7 @@ from badminton_commentary.schemas import (
 )
 
 
-FIXTURE_DIR = Path(__file__).parents[1] / "fixtures" / "sample_match"
+FIXTURE_DIR = Path(__file__).parents[2] / "fixtures" / "sample_match"
 
 
 def load_model(filename, model):

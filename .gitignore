@@ -36,6 +36,10 @@ config.yaml
 
 # Generated commentary output
 output/
+outputs/
+
+# Local experiment datasets and intermediate stages
+experiments/*/workspace/
 
 # Editors and operating systems
 .idea/

@@ -27,7 +27,7 @@ class StrokeCommentaryGenerationError(ProviderError):
     """Raised when an event-driven provider response is invalid or unsupported."""
 
 
-def _stroke_catalog(
+def build_stroke_catalog(
     analysis: StrokeEventAnalysis,
     plan: StrokeEventPlan,
     score: RallyScore,
@@ -67,6 +67,7 @@ def generate_stroke_commentary(
     score: RallyScore,
     player_names: dict[str, str] | None = None,
 ) -> StrokeCommentaryLine:
+    """Legacy one-stroke provider call retained for compatibility and tests."""
     if not plan.should_comment:
         raise ValueError("cannot generate commentary for a skipped stroke plan")
     if (
@@ -83,7 +84,7 @@ def generate_stroke_commentary(
         "plan": plan.model_dump(),
         "current_stroke": analysis.current_stroke.model_dump(),
         "previous_strokes": [item.model_dump() for item in analysis.previous_strokes],
-        "fact_catalog": _stroke_catalog(analysis, plan, score),
+        "fact_catalog": build_stroke_catalog(analysis, plan, score),
     }
     response = provider.generate(
         system_prompt=SYSTEM_PROMPT_PATH.read_text(encoding="utf-8"),

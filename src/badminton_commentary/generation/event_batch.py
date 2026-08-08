@@ -23,6 +23,7 @@ EventProviderFactory = Callable[
     LLMProvider,
 ]
 SummaryProviderFactory = Callable[[ScoredRallyFact], LLMProvider]
+RallyBatchProviderFactory = Callable[[ScoredRallyFact], LLMProvider]
 
 
 def generate_event_driven_commentary(
@@ -32,7 +33,11 @@ def generate_event_driven_commentary(
     summary_provider_factory: SummaryProviderFactory | None = None,
     player_names: dict[str, str] | None = None,
 ) -> EventDrivenCommentaryOutput:
-    """Generate chronological per-stroke lines plus optional rally summaries."""
+    """Legacy multi-call orchestration kept for compatibility.
+
+    Production callers should use ``RallyCommentaryService`` so one rally is
+    generated with exactly one provider request.
+    """
     bundles = []
     for scored in sorted(scored_rallies, key=lambda item: item.fact.segment_index):
         event_lines = []
@@ -74,4 +79,30 @@ def generate_event_driven_commentary(
                 summary=summary,
             )
         )
+    return EventDrivenCommentaryOutput(rallies=bundles)
+
+
+def generate_batched_event_driven_commentary(
+    *,
+    scored_rallies: Iterable[ScoredRallyFact],
+    provider_factory: RallyBatchProviderFactory,
+    player_names: dict[str, str] | None = None,
+) -> EventDrivenCommentaryOutput:
+    """Compatibility collection API using at most one provider call per rally.
+
+    New single-rally integrations should call ``RallyCommentaryService``.
+    """
+    from .rally_batch_commentator import generate_rally_commentary_batch
+
+    bundles = [
+        generate_rally_commentary_batch(
+            provider=provider_factory(scored),
+            scored=scored,
+            player_names=player_names,
+        )
+        for scored in sorted(
+            scored_rallies,
+            key=lambda item: item.fact.segment_index,
+        )
+    ]
     return EventDrivenCommentaryOutput(rallies=bundles)

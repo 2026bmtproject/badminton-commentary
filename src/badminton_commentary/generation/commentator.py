@@ -31,7 +31,7 @@ class CommentaryGenerationError(ProviderError):
     """Raised when a provider response cannot become grounded commentary."""
 
 
-def _fact_catalog(
+def build_fact_catalog(
     scored: ScoredRallyFact,
     analysis: RallyAnalysis,
 ) -> dict[str, object]:
@@ -88,14 +88,14 @@ def generate_commentary(
     analysis: RallyAnalysis | None = None,
     player_names: dict[str, str] | None = None,
 ) -> GeneratedCommentary:
-    """Generate and validate one grounded commentary response."""
+    """Generate a legacy summary-only grounded commentary response."""
     if not plan.should_comment:
         raise ValueError("cannot generate commentary for a skipped plan")
     if plan.segment_index != scored.fact.segment_index:
         raise ValueError("plan segment_index does not match rally fact")
 
     resolved_analysis = analysis or analyze_rally(scored.fact)
-    catalog = _fact_catalog(scored, resolved_analysis)
+    catalog = build_fact_catalog(scored, resolved_analysis)
     missing = set(plan.allowed_fact_ids) - set(catalog)
     if missing:
         raise ValueError(f"plan references unavailable fact ids: {sorted(missing)}")

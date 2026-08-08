@@ -260,6 +260,18 @@ class EventDrivenCommentaryOutput(StrictModel):
     rallies: list[RallyCommentaryBundle]
 
 
+class GeneratedStrokeBatchItem(StrictModel):
+    stroke_index: NonNegativeInt
+    text: Annotated[str, Field(min_length=1, max_length=120)]
+    source_fact_ids: Annotated[list[str], Field(min_length=1)]
+
+
+class GeneratedRallyTextBatch(StrictModel):
+    segment_index: NonNegativeInt
+    events: list[GeneratedStrokeBatchItem]
+    summary: GeneratedCommentary | None
+
+
 SubtitleKind = Literal["event", "summary"]
 
 

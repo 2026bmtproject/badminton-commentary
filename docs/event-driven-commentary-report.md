@@ -24,9 +24,12 @@ Stroke Event Analyzer ────────────── Rally Analyzer
 StrokeEventAnalysis                  RallyAnalysis
         ↓                                  ↓
 Event Planner                         Rally Planner
-        ↓                                  ↓
-Stroke Generator                      Summary Generator
-        └──────────── events + summary ────┘
+        └──────────────┬───────────────────┘
+                       ↓
+             Rally Batch Generator
+             （每個 rally 一次 LLM）
+                       ↓
+                events + summary
 ```
 
 Gemini 不負責建立 tactical relation；它只將 rule-based facts 轉為自然繁中。
@@ -61,22 +64,34 @@ salience 的最大值。初始門檻為 `0.65`：
 
 ## 時序與 provenance
 
-Gemini 只回傳：
+Gemini 每個 rally 一次回傳：
 
 ```json
 {
-  "text": "網前球挑高後，下一拍接上殺球！",
-  "source_fact_ids": [
-    "rally:2:local:7-9:drop_lift_attack_sequence",
-    "rally:2:stroke:7",
-    "rally:2:stroke:8",
-    "rally:2:stroke:9"
-  ]
+  "segment_index": 2,
+  "events": [
+    {
+      "stroke_index": 9,
+      "text": "網前球挑高後，下一拍接上殺球！",
+      "source_fact_ids": [
+        "rally:2:local:7-9:drop_lift_attack_sequence",
+        "rally:2:stroke:7",
+        "rally:2:stroke:8",
+        "rally:2:stroke:9"
+      ]
+    }
+  ],
+  "summary": {
+    "segment_index": 2,
+    "text": "挑球之後緊接著轉為進攻球。",
+    "source_fact_ids": ["rally:2:pattern:lift_to_attack_transition"]
+  }
 }
 ```
 
 `segment_index`、`stroke_index`、`frame`、`time_sec` 全由 Python 從 event analysis
-寫入，模型無法重排。local fact 若被引用，Validator 要求同時引用其全部
+校對或寫入。模型回傳的 event `stroke_index` 必須與計畫完全相同且順序一致；
+`frame` 和 `time_sec` 不交給模型生成。local fact 若被引用，Validator 要求同時引用其全部
 `supporting_fact_ids`，並強制包含 current stroke fact。文字若包含比分，還必須引用
 score fact，且數值要與該 rally 的 `RallyScore` 完全一致。
 
@@ -114,7 +129,7 @@ score fact，且數值要與該 rally 的 `RallyScore` 完全一致。
 Fake 離線驗證：
 
 ```powershell
-uv run python .\scripts\generate_ttyvsasy_commentary.py `
+uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
   --provider fake `
   --mode event-driven `
   --config .\config.yaml.example
@@ -123,7 +138,7 @@ uv run python .\scripts\generate_ttyvsasy_commentary.py `
 Gemini：
 
 ```powershell
-uv run python .\scripts\generate_ttyvsasy_commentary.py `
+uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
   --provider gemini `
   --mode event-driven `
   --config .\config.yaml
@@ -142,5 +157,5 @@ score `>= 0.9` 的即時 unit 能使用一個驚嘆號。
 - 目前是離線 timestamp-aligned event commentary，尚未實作串流播放或延遲排程。
 - 尚未使用 pose，不能描述真實移動、跳躍或防守姿態。
 - 「防回去了」需要額外 deterministic defensive-retrieval fact，目前不允許生成。
-- Gemini 逐 event 呼叫會增加請求數；後續可加入相鄰 unit batching 與快取，但不得
-  破壞時間順序及 provenance。
+- 目前每個 rally 呼叫一次 Gemini；三組 TTYvsASY fixture 共 15 個 rally，因此由
+  原本 50 次降為 15 次。後續仍可加入 checkpoint 與 prompt cache。

@@ -5,7 +5,7 @@ import pytest
 from badminton_commentary.config import load_config
 
 
-EXAMPLE_CONFIG = Path(__file__).parents[1] / "config.yaml.example"
+EXAMPLE_CONFIG = Path(__file__).parents[2] / "config.yaml.example"
 
 
 def test_example_config_is_valid():

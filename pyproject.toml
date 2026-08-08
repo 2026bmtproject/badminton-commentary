@@ -1,7 +1,7 @@
 [project]
 name = "badminton-commentary"
 version = "0.1.0"
-description = "Add your description here"
+description = "Grounded event-driven badminton commentary generation"
 readme = "README.md"
 authors = [
     { name = "94SungLA", email = "90839322+94SungLA@users.noreply.github.com" }

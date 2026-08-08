@@ -1,9 +1,18 @@
 from badminton_commentary.schemas import StrokeEventAnalysis, StrokeEventPlan
 
 
-def plan_stroke_commentary(analysis: StrokeEventAnalysis) -> StrokeEventPlan:
-    """Plan one chronological commentary unit from local deterministic facts."""
-    if not analysis.should_speak:
+def plan_stroke_commentary(
+    analysis: StrokeEventAnalysis,
+    *,
+    importance_score: float | None = None,
+) -> StrokeEventPlan:
+    """Plan one event unit; importance may reduce density for ordinary rallies."""
+    low_importance_suppressed = (
+        importance_score is not None
+        and importance_score < 0.25
+        and analysis.speaking_score < 0.9
+    )
+    if not analysis.should_speak or low_importance_suppressed:
         return StrokeEventPlan(
             segment_index=analysis.segment_index,
             stroke_index=analysis.stroke_index,
