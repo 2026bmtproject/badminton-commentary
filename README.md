@@ -229,17 +229,11 @@ uv run pytest
 uv run ruff check .
 ```
 
-Python 版本：`>=3.10,<3.11`。
-
-在含繁體中文的 Windows 路徑中，Python 3.10 可能以 CP950 讀取 editable install 的
-`.pth`。若 `uv sync` 後出現 `UnicodeDecodeError`，可依下列方式重寫：
+Python 版本固定為 `3.12.x`。Repository 內的 `.python-version` 會讓 uv 在執行
+`uv sync` 時自動選擇或安裝相容的 Python 3.12。
 
 ```powershell
-$path = '.\.venv\Lib\site-packages\badminton_commentary.pth'
-$content = (Resolve-Path '.\src').Path + "`r`n"
-[System.IO.File]::WriteAllText(
-    (Resolve-Path $path),
-    $content,
-    [System.Text.Encoding]::GetEncoding(950)
-)
+uv run python --version
 ```
+
+預期輸出為 `Python 3.12.x`。
