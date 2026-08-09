@@ -14,6 +14,10 @@ class CommentaryValidationError(ValueError):
     """Raised when generated text is not supported by its structured facts."""
 
 
+class CommentaryLanguageSafetyError(CommentaryValidationError):
+    """Raised for unsafe wording that can be replaced without changing facts."""
+
+
 def normalize_exclamation_emphasis(text: str, *, allow_exclamation: bool) -> str:
     """Deterministically enforce the emphasis policy without changing claims."""
     normalized = []
@@ -45,13 +49,13 @@ def _sentence_count(text: str) -> int:
 def validate_language_safety(*, text: str, allow_exclamation: bool) -> None:
     exclamation_count = text.count("!") + text.count("！")
     if exclamation_count > 1 or (exclamation_count and not allow_exclamation):
-        raise CommentaryValidationError(
+        raise CommentaryLanguageSafetyError(
             "generated commentary uses unsupported exclamation emphasis"
         )
 
     internal_terms = ("觀測球路", "短窗口", "後場類型", "網前類型", "類型")
     if any(term in text for term in internal_terms):
-        raise CommentaryValidationError(
+        raise CommentaryLanguageSafetyError(
             "generated commentary exposes internal schema wording"
         )
 
@@ -73,7 +77,7 @@ def validate_language_safety(*, text: str, allow_exclamation: bool) -> None:
         "被迫",
     )
     if any(term in text for term in unsupported_inferences):
-        raise CommentaryValidationError(
+        raise CommentaryLanguageSafetyError(
             "generated commentary makes an unsupported movement or causal inference"
         )
 
@@ -86,7 +90,7 @@ def validate_language_safety(*, text: str, allow_exclamation: bool) -> None:
         "最後以",
     )
     if any(claim in text for claim in unsupported_outcome_claims):
-        raise CommentaryValidationError(
+        raise CommentaryLanguageSafetyError(
             "generated commentary makes an unsupported rally outcome claim"
         )
 

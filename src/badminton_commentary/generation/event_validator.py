@@ -3,11 +3,26 @@ import re
 from badminton_commentary.schemas import (
     GeneratedStrokeText,
     RallyScore,
+    StrokeConfidenceBand,
     StrokeEventAnalysis,
     StrokeEventPlan,
 )
 
 from .validator import CommentaryValidationError, validate_language_safety
+
+
+UNCERTAINTY_WORDING = re.compile(r"可能|似乎|看來|辨識結果|研判")
+
+
+def ensure_uncertainty_wording(
+    text: str,
+    *,
+    confidence_band: StrokeConfidenceBand,
+) -> str:
+    """Deterministically soften a non-reliable provider sentence when needed."""
+    if confidence_band == "reliable" or UNCERTAINTY_WORDING.search(text):
+        return text
+    return f"辨識結果顯示，{text}"
 
 
 def validate_stroke_commentary(
@@ -69,6 +84,14 @@ def validate_stroke_commentary(
             raise CommentaryValidationError(
                 f"local sequence citation is missing support: {sorted(missing_support)}"
             )
+
+    if (
+        analysis.current_stroke.confidence_band != "reliable"
+        and not UNCERTAINTY_WORDING.search(generated.text)
+    ):
+        raise CommentaryValidationError(
+            "non-reliable stroke commentary requires uncertainty wording"
+        )
 
     sentence_endings = sum(generated.text.count(mark) for mark in "。！？!?")
     if sentence_endings > 1:

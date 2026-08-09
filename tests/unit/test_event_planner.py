@@ -62,6 +62,21 @@ def test_skipped_event_plan_has_no_allowed_facts():
     assert plan.allowed_fact_ids == []
 
 
+def test_forced_event_plan_includes_an_ordinary_serve():
+    ordinary_serve = fact()
+    ordinary_serve.events = ordinary_serve.events[:1]
+    ordinary_serve.events[0].stroke_type = "發球"
+    analysis = analyze_stroke_events(
+        ordinary_serve,
+        include_all_strokes=True,
+    )[0]
+
+    plan = plan_stroke_commentary(analysis, force_commentary=True)
+
+    assert plan.should_comment is True
+    assert plan.allowed_fact_ids[0] == "rally:1:stroke:0"
+
+
 def test_low_importance_reduces_ordinary_event_density():
     ordinary = fact()
     ordinary.events = ordinary.events[:1]

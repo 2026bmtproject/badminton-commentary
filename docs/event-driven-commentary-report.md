@@ -49,18 +49,22 @@ Gemini 不負責建立 tactical relation；它只將 rule-based facts 轉為自�
 所有 sequence 只允許原始 event index 連續的 2–3 拍。跳過低 confidence event 後，
 不得把不相鄰的 stroke 重新接成 sequence。
 
-## Speaking policy
+## Production all-strokes policy
 
-每個 usable stroke 都有 `speaking_score`，取 current stroke salience 與 local fact
-salience 的最大值。初始門檻為 `0.65`：
+目前影片是 pre-segment rally，用來模擬即時逐拍賽評；使用者選定 segment 已經完成入口
+篩選。因此 production batch 對每個具有 player、stroke type 與 confidence 的 stroke 建立
+event unit，不再以 `speaking_score`、salience 或 Importance 刪除事件：
 
-- 普通發球：通常跳過。
-- 重複高遠球：通常跳過或由後續 sequence 合併。
-- 小球、切球、平快球：較容易發話。
-- 殺球、撲球、高 salience transition：優先發話。
+- 普通發球也必須輸出。
+- 一般回球與重複球種仍保留，Generator 應用極短自然語句描述。
+- 低 confidence stroke 仍保留，但必須使用不確定措辭。
+- 缺少 player mapping 的辨識結果放入 `all_stroke_fact_ids` 與 ordered context，不能建立
+  具名 event，也不能猜測擊球者。
 
-若下一個相鄰 local fact 包含當前 stroke 且 salience 更高，當前 stroke 先不發話，
-由下一個 commentary unit 合併描述。非高 salience 事件另有最小間隔及重複 focus cooldown。
+`speaking_score >= 0.65`、相鄰合併與 focus cooldown 仍保留在 legacy sparse mode，供舊
+實驗 API 使用；production `RallyCommentaryService` 會明確啟用 all-strokes mode。Service
+也不再計算 segment Importance；summary 由 user-selected rally planner 直接依現有 facts
+規劃。
 
 ## 時序與 provenance
 
@@ -149,8 +153,9 @@ uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
 ## 安全限制
 
 兩層 Generator 共用語言安全規則，禁止最後一拍、致勝球、得分原因、被迫、抓到
-機會、戰術意圖、主被動、因果、球員移動及 schema/debug wording。只有 speaking
-score `>= 0.9` 的即時 unit 能使用一個驚嘆號。
+機會、戰術意圖、主被動、因果、球員移動及 schema/debug wording。只有 reliable 且
+speaking score `>= 0.9` 的即時 unit 能使用一個驚嘆號；cautious／low confidence 一律
+使用正常句號與不確定措辭。
 
 ## MVP 限制
 

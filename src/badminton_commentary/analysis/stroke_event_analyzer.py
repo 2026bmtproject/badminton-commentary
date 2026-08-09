@@ -197,15 +197,23 @@ def analyze_stroke_events(
     fact: RallyFact,
     *,
     context_size: int = 4,
+    include_all_strokes: bool = False,
 ) -> list[StrokeEventAnalysis]:
-    """Analyze usable strokes in timestamp order with only prior local context."""
+    """Analyze strokes in time order; all-strokes mode bypasses speaking filters."""
     if not 2 <= context_size <= 4:
         raise ValueError("context_size must be between 2 and 4")
 
     usable = [
         stroke
         for event in fact.events
-        if (stroke := analyze_stroke(fact, event)) is not None
+        if (
+            stroke := analyze_stroke(
+                fact,
+                event,
+                include_low_confidence=include_all_strokes,
+            )
+        )
+        is not None
     ]
     event_by_index = {event.event_index: event for event in fact.events}
     analyses = []
@@ -231,11 +239,16 @@ def analyze_stroke_events(
                 local_facts=local_facts,
                 speaking_score=speaking_score,
                 should_speak=(
-                    current.confidence_band == "reliable"
-                    and speaking_score >= SPEAKING_THRESHOLD
+                    include_all_strokes
+                    or (
+                        current.confidence_band == "reliable"
+                        and speaking_score >= SPEAKING_THRESHOLD
+                    )
                 ),
             )
         )
+    if include_all_strokes:
+        return analyses
     for current, following in zip(analyses, analyses[1:]):
         if not current.should_speak or not following.local_facts:
             continue

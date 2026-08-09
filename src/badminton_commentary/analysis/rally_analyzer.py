@@ -49,15 +49,28 @@ PATTERN_METADATA = {
 }
 
 
-def analyze_stroke(fact: RallyFact, event: RallyFactEvent) -> AnalyzedStroke | None:
-    if event.stroke_type is None or event.stroke_confidence is None:
+def analyze_stroke(
+    fact: RallyFact,
+    event: RallyFactEvent,
+    *,
+    include_low_confidence: bool = False,
+) -> AnalyzedStroke | None:
+    if (
+        event.player is None
+        or event.stroke_type is None
+        or event.stroke_confidence is None
+    ):
         return None
-    if event.stroke_confidence < CAUTIOUS_CONFIDENCE:
+    if event.stroke_confidence < CAUTIOUS_CONFIDENCE and not include_low_confidence:
         return None
     band = (
         "reliable"
         if event.stroke_confidence >= RELIABLE_CONFIDENCE
-        else "cautious"
+        else (
+            "cautious"
+            if event.stroke_confidence >= CAUTIOUS_CONFIDENCE
+            else "low"
+        )
     )
     return AnalyzedStroke(
         fact_id=f"rally:{fact.segment_index}:stroke:{event.event_index}",

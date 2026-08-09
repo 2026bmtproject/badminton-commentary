@@ -1,0 +1,26 @@
+{
+  "fps": 30.0,
+  "segments": [
+    {
+      "start_frame": 0,
+      "end_frame": 99,
+      "start_sec": 0.0,
+      "end_sec": 3.3,
+      "duration_sec": 3.3
+    },
+    {
+      "start_frame": 100,
+      "end_frame": 199,
+      "start_sec": 3.333333,
+      "end_sec": 6.633333,
+      "duration_sec": 3.3
+    },
+    {
+      "start_frame": 200,
+      "end_frame": 299,
+      "start_sec": 6.666667,
+      "end_sec": 9.966667,
+      "duration_sec": 3.3
+    }
+  ]
+}

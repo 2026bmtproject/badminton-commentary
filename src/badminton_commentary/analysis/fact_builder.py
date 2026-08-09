@@ -55,6 +55,7 @@ def build_rally_facts(
     fact_events: dict[int, list[RallyFactEvent]] = {
         segment_index: [] for segment_index in range(segment_count)
     }
+    source_event_indexes: set[int] = set()
     for event_index, event in enumerate(events.events):
         if event.segment_index >= segment_count:
             raise ValueError(
@@ -70,9 +71,17 @@ def build_rally_facts(
             )
 
         stroke = stroke_by_event.get(event_index)
+        source_event_index = (
+            event.source_event_index
+            if event.source_event_index is not None
+            else event_index
+        )
+        if source_event_index in source_event_indexes:
+            raise ValueError(f"duplicate source event_index {source_event_index}")
+        source_event_indexes.add(source_event_index)
         fact_events[event.segment_index].append(
             RallyFactEvent(
-                event_index=event_index,
+                event_index=source_event_index,
                 frame=event.frame,
                 time_sec=event.frame / segments.fps,
                 player=event.player,

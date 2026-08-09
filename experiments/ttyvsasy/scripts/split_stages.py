@@ -119,36 +119,6 @@ def split_group(
             "evidence": "identity_frame.jpg",
         },
     )
-    commentary_events: list[dict] = []
-    commentary_strokes: list[dict] = []
-    for stroke in localized_strokes:
-        player = stroke["player"]
-        if player not in player_mapping:
-            continue
-        commentary_event_index = len(commentary_events)
-        commentary_events.append(
-            {
-                "frame": stroke["frame"],
-                "player": player_mapping[player],
-                "segment_index": stroke["segment_index"],
-            }
-        )
-        commentary_strokes.append(
-            {
-                "event_index": commentary_event_index,
-                "stroke_type": stroke["stroke_type"],
-                "confidence": stroke["confidence"],
-            }
-        )
-    write_json(
-        clip_root / "commentary_input" / "events.json",
-        {"events": commentary_events},
-    )
-    write_json(
-        clip_root / "commentary_input" / "strokes.json",
-        {"strokes": commentary_strokes},
-    )
-
     shuttle_payload = dict(source_shuttle)
     shuttle_payload["points"] = [
         localized

@@ -63,6 +63,22 @@ def test_low_information_serve_and_repeated_clear_are_not_forced_to_speak():
     assert analyses[2].should_speak is False
 
 
+def test_all_strokes_mode_keeps_serve_and_low_confidence_stroke():
+    analyses = analyze_stroke_events(
+        make_fact(
+            [
+                ("a", "發球", 0.95),
+                ("b", "殺球", 0.3),
+            ]
+        ),
+        include_all_strokes=True,
+    )
+
+    assert [item.stroke_index for item in analyses] == [0, 1]
+    assert [item.should_speak for item in analyses] == [True, True]
+    assert analyses[1].current_stroke.confidence_band == "low"
+
+
 def test_high_salience_smash_is_more_likely_to_speak():
     analyses = analyze_stroke_events(
         make_fact([("a", "高遠球", 0.9), ("b", "殺球", 0.9)])

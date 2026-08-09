@@ -1,16 +1,29 @@
 # Badminton Commentary
 
-將 Badminton Analysis System 已建立的單一 `RallyFact` 轉成可追溯的繁體中文即時賽評。
+將 Badminton Analysis System 的 stage outputs 轉成可追溯的繁體中文即時賽評。
 
 正式 runtime 回傳 structured JSON；不負責影片分析、Pose、TTS、FFmpeg 或前端播放。
 
 ## Production pipeline
 
 ```text
-Upstream match analysis
-        ↓
-     RallyFact
-        ↓
+Badminton Analysis System
+│
+├── match_segmentation ─┐
+├── event_detection ────┤
+├── score_recognition ──┤ current inputs
+├── stroke_classification
+│                       │
+├── court_detection ────┤ future
+├── shuttle_tracking ───┤ future
+└── pose ────────────────┘ future
+                        ↓
+                Upstream Stage Adapter
+                        ↓
+                    Fact Builder
+                        ↓
+                     RallyFact
+                        ↓
 Stroke Event Analyzer ── Event Planner
 Rally Analyzer        ── Rally Planner
         ↓
@@ -25,12 +38,57 @@ RallyCommentaryBundle JSON
 frontend / Badminton Analysis System adapter
 ```
 
-正式使用情境是一位使用者選取一個已分析完成的 rally。該 rally 所有 selected stroke
-events 與 summary 會合併成一次 Provider request；不會每個 stroke 各呼叫一次 Gemini。
+`RallyFact` 是 badminton-commentary 內部的 canonical domain representation，不是要求
+Badminton Analysis System 預先建立的外部資料格式。court、shuttle 與 pose 目前只有
+filesystem path extension hooks；尚未轉成 facts，也不會送入 Gemini prompt。
+
+正式使用情境是一位使用者選取一個已分析完成的 rally。使用者的選擇本身就是啟動條件；
+該 rally 中所有具有球種與 confidence 的 strokes（包含普通發球與低 confidence 結果）
+都會依時間順序放進同一次 Provider request。具有明確 player mapping 的 stroke 必須各自
+產生一個 event；無法確認 player 的 stroke 只作為完整序列上下文，模型不得猜測擊球者。
+Rally summary 也合併在同一次請求，不會每個 stroke 各呼叫一次 Gemini。
 
 ## Public API
 
-主要 API 是：
+主系統的高階 API 直接接受已解析的 stage models：
+
+```python
+from badminton_commentary import RallyCommentaryService
+from badminton_commentary.adapters import (
+    CourtPositionToPlayer,
+    StagePaths,
+    read_upstream_stages,
+)
+
+stages = read_upstream_stages(StagePaths.from_stage_root(match_path / "stages"))
+service = RallyCommentaryService(provider=provider, player_names=player_names)
+
+bundle = service.generate_from_stages(
+    stages=stages,
+    segment_index=37,
+    court_position_to_player=CourtPositionToPlayer(top="b", bottom="a"),
+)
+```
+
+Filesystem reader 是外層便利功能；核心 adapter 接受 typed `UpstreamStageData`，不自行尋找
+固定資料夾。`StagePaths` 中的 `court_detection`、`shuttle_tracking`、`pose` 目前只保留
+未來擴充位置，不會被 reader 解析。
+
+主系統原始 `stroke_classification.player` 是場上位置 `top/bottom`，而比分使用固定球員
+代號 `a/b`。目前 stages 沒有提供兩者的身分關係，因此 caller 必須明確提供所選 segment
+的 `CourtPositionToPlayer`；adapter 不會依換邊或擊球順序猜測。
+
+需要檢查中間結果時，可以停在 `RallyFact`：
+
+```python
+rally_fact = service.prepare_rally_fact(
+    stages=stages,
+    segment_index=37,
+    court_position_to_player=position_mapping,
+)
+```
+
+既有較低階 API 保留：
 
 ```python
 from badminton_commentary import RallyCommentaryService
@@ -58,11 +116,12 @@ commentary = generate_rally_commentary(
 )
 ```
 
-上層系統不需要知道 fixture 路徑、TTYvsASY、ASS 或 FFmpeg。
+上層系統不需要建立 `commentary_input/*.json`，也不需要知道 fixture、TTYvsASY、ASS 或
+FFmpeg。
 
 ### Input
 
-正式 service 接受一個已通過 Pydantic 驗證的 `RallyFact`：
+較低階 service 接受一個已通過 Pydantic 驗證的 `RallyFact`：
 
 ```json
 {
@@ -88,7 +147,13 @@ commentary = generate_rally_commentary(
 }
 ```
 
-`RallyFact` 通常由上游 adapter 或 `build_rally_facts()` 透過 `event_index` join 建立。
+Stage Adapter 依絕對 frame 選出 requested segment，驗證
+`stroke_classification.event_index → event_detection.events[]`、frame 與 segment_index，
+再交給 Fact Builder 建立 `RallyFact`。缺少 optional highlight stage 時使用 `None`；不會
+從其他 stage 推論 highlight。
+
+實際 schema、join 演算法與 TTYvsASY fixture-specific 邊界詳見
+[docs/upstream-stage-adapter.md](docs/upstream-stage-adapter.md)。
 
 ### Output
 
@@ -116,27 +181,29 @@ commentary = generate_rally_commentary(
 `stroke_index`、`frame`、`time_sec` 由 Python 寫入。模型回傳的 stroke order 必須與
 Planner 完全一致，所有文字 claim 都必須由 `source_fact_ids` 支持。
 
-## Importance
+## Selection、Importance 與逐拍輸出
 
-使用者選取 rally 並呼叫 service，決定是否啟動 commentary pipeline。Importance 不再
-作為整個 service 的入口 gate，而是控制輸出密度與詳細程度：
+使用者選取 rally 並呼叫 service，決定是否啟動 commentary pipeline。Production 的逐拍
+事件不再使用 Importance 或 salience 篩選：普通發球、一般回球與低 confidence stroke 都
+會送給 Provider，且具有 player mapping 的每拍都必須輸出。
 
-- 低 importance：只保留 `speaking_score >= 0.9` 的高 salience events，summary 僅使用比分或拍數等基本事實。
-- 中 importance：使用標準 speaking policy，summary 簡短。
-- 高 importance：保留標準 event density，summary 可使用更多 pattern、較完整且能有
-  適度情緒。
-
-Service 預設使用 deterministic `score_importance()`；上游已有 ImportanceResult 時可透過
-`importance=` 傳入。
+Production `RallyCommentaryService` 不再呼叫 `score_importance()`；summary 使用固定的
+user-selected rally planner，依可用的 score、拍數、pattern 與 highlight facts 規劃內容。
+既有 `ImportanceResult` 與 `plan_commentary()` 保留給舊 summary-only API、fixtures 與相容性，
+不會刪除任何 production 逐拍 event。`speaking_score` 也只保留給舊的稀疏輸出流程與受控
+驚嘆號判斷，不是 production event inclusion gate。
 
 ## Grounding guarantees
 
 - Fact Builder、Analyzers、Planners 與 Validators 都是 deterministic Python。
 - LLM 不負責建立比分、球種、擊球者、順序、時間或 tactical relation。
 - Local sequence 必須由相鄰 `event_index` 支持。
-- 普通發球與低資訊量 strokes 不會為了填滿賽評而被選用。
+- 所有具有球種與 confidence 的 strokes 都進入 ordered context，包含普通發球。
+- 具有 player mapping 的每個 stroke 都有對應 event；缺少 mapping 時不得猜測擊球者。
 - 禁止自行宣稱致勝球、最後一拍、得分原因、戰術意圖、因果或球員移動。
-- 低 confidence stroke 不會以肯定語氣輸出。
+- 低 confidence stroke 保留，但必須使用「可能」、「似乎」或「辨識結果」等保守措辭。
+- Provider 只有措辭違反語言安全規則時，batch 會以同一組 grounded facts 建立 deterministic
+  fallback；provenance、順序、比分與 current stroke 錯誤仍會拒絕整批。
 - 所有 Provider JSON 都必須通過 Pydantic 與 provenance validation。
 
 ## Generic CLI
@@ -173,6 +240,7 @@ model、timeout 與 retry 設定。
 badminton-commentary/
 ├── src/badminton_commentary/
 │   ├── analysis/           # deterministic facts and patterns
+│   ├── adapters/           # main-system stage schemas/readers/normalization
 │   ├── generation/         # planners, batch generator, validators
 │   ├── providers/          # replaceable LLM providers
 │   ├── services/           # production public orchestration boundary
@@ -183,7 +251,8 @@ badminton-commentary/
 ├── experiments/
 │   └── ttyvsasy/           # evaluation harness and ignored local workspace
 ├── fixtures/
-│   └── sample_match/       # small stable test fixture
+│   ├── sample_match/       # normalized Fact Builder fixture
+│   └── upstream_stages/    # actual main-system stage structure fixture
 ├── tests/
 │   ├── unit/
 │   ├── integration/

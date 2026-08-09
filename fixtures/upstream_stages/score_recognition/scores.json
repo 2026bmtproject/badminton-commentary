@@ -1,0 +1,28 @@
+{
+  "model": "fixture",
+  "attempts": [],
+  "downscaled_video": "fixture.mp4",
+  "rallies": [
+    {
+      "segment_index": 0,
+      "score_a": 7,
+      "score_b": 7,
+      "server": null,
+      "game_index": 1
+    },
+    {
+      "segment_index": 1,
+      "score_a": 8,
+      "score_b": 7,
+      "server": "a",
+      "game_index": 1
+    },
+    {
+      "segment_index": 2,
+      "score_a": 8,
+      "score_b": 8,
+      "server": "b",
+      "game_index": 1
+    }
+  ]
+}

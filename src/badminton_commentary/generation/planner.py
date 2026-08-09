@@ -2,6 +2,7 @@ from badminton_commentary.analysis.rally_analyzer import analyze_rally
 from badminton_commentary.schemas import (
     CommentaryPlan,
     RallyAnalysis,
+    RallyFact,
     ScoredRallyFact,
 )
 
@@ -96,4 +97,44 @@ def plan_commentary(
         focus=focus,
         max_sentences=max_sentences,
         allowed_fact_ids=allowed_fact_ids,
+    )
+
+
+def plan_selected_rally_summary(
+    fact: RallyFact,
+    analysis: RallyAnalysis | None = None,
+) -> CommentaryPlan:
+    """Plan a concise summary after the user has already selected the rally."""
+    resolved_analysis = analysis or analyze_rally(fact)
+    prefix = f"rally:{fact.segment_index}"
+    allowed: list[str] = []
+    if fact.score.a is not None and fact.score.b is not None:
+        allowed.append(f"{prefix}:score")
+    if fact.events:
+        allowed.append(f"{prefix}:length")
+
+    selected_pattern = (
+        resolved_analysis.patterns[0] if resolved_analysis.patterns else None
+    )
+    if selected_pattern is not None:
+        allowed.append(selected_pattern.fact_id)
+        if selected_pattern.representative_fact_id is not None:
+            allowed.append(selected_pattern.representative_fact_id)
+    elif resolved_analysis.notable_strokes:
+        allowed.append(resolved_analysis.notable_strokes[0].fact_id)
+
+    if fact.highlight_score is not None:
+        allowed.append(f"{prefix}:highlight")
+
+    excited = fact.highlight_score is not None and fact.highlight_score >= 0.75
+    focus = ["user_selected_rally"]
+    if selected_pattern is not None:
+        focus.append(selected_pattern.name)
+    return CommentaryPlan(
+        segment_index=fact.segment_index,
+        should_comment=bool(allowed),
+        style="excited" if excited else "concise",
+        focus=focus,
+        max_sentences=2 if excited else 1,
+        allowed_fact_ids=list(dict.fromkeys(allowed)),
     )

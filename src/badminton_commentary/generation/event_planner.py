@@ -5,14 +5,17 @@ def plan_stroke_commentary(
     analysis: StrokeEventAnalysis,
     *,
     importance_score: float | None = None,
+    force_commentary: bool = False,
 ) -> StrokeEventPlan:
-    """Plan one event unit; importance may reduce density for ordinary rallies."""
+    """Plan one event; forced mode bypasses legacy importance/salience filters."""
     low_importance_suppressed = (
         importance_score is not None
         and importance_score < 0.25
         and analysis.speaking_score < 0.9
     )
-    if not analysis.should_speak or low_importance_suppressed:
+    if not force_commentary and (
+        not analysis.should_speak or low_importance_suppressed
+    ):
         return StrokeEventPlan(
             segment_index=analysis.segment_index,
             stroke_index=analysis.stroke_index,
@@ -42,7 +45,12 @@ def plan_stroke_commentary(
         frame=analysis.frame,
         time_sec=analysis.time_sec,
         should_comment=True,
-        style="excited" if analysis.speaking_score >= 0.9 else "concise",
+        style=(
+            "excited"
+            if analysis.current_stroke.confidence_band == "reliable"
+            and analysis.speaking_score >= 0.9
+            else "concise"
+        ),
         max_sentences=1,
         focus=focus,
         allowed_fact_ids=allowed,

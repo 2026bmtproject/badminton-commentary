@@ -7,6 +7,7 @@ Player = Literal["a", "b"]
 NonNegativeInt = Annotated[int, Field(ge=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0)]
 Probability = Annotated[float, Field(ge=0, le=1)]
+DURATION_QUANTIZATION_TOLERANCE_SEC = 0.001 + 1e-9
 
 
 class StrictModel(BaseModel):
@@ -27,8 +28,13 @@ class Segment(StrictModel):
         if self.end_sec < self.start_sec:
             raise ValueError("end_sec must be greater than or equal to start_sec")
         expected_duration = self.end_sec - self.start_sec
-        if abs(self.duration_sec - expected_duration) > 1e-6:
-            raise ValueError("duration_sec must equal end_sec - start_sec")
+        if (
+            abs(self.duration_sec - expected_duration)
+            > DURATION_QUANTIZATION_TOLERANCE_SEC
+        ):
+            raise ValueError(
+                "duration_sec must equal end_sec - start_sec within 0.001 seconds"
+            )
         return self
 
 
@@ -51,8 +57,9 @@ class ScoresInput(StrictModel):
 
 class HitEvent(StrictModel):
     frame: NonNegativeInt
-    player: Player
+    player: Player | None
     segment_index: NonNegativeInt
+    source_event_index: NonNegativeInt | None = None
 
 
 class EventsInput(StrictModel):
@@ -87,7 +94,7 @@ class RallyFactEvent(StrictModel):
     event_index: NonNegativeInt
     frame: NonNegativeInt
     time_sec: NonNegativeFloat
-    player: Player
+    player: Player | None
     stroke_type: str | None
     stroke_confidence: Probability | None
 
@@ -115,7 +122,7 @@ class ScoredRallyFact(StrictModel):
     importance: ImportanceResult
 
 
-StrokeConfidenceBand = Literal["reliable", "cautious"]
+StrokeConfidenceBand = Literal["reliable", "cautious", "low"]
 StrokePatternName = Literal[
     "serve_return_pattern",
     "lift_to_attack_transition",

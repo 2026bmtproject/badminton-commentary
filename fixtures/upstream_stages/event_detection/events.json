@@ -1,0 +1,16 @@
+{
+  "fps": 30.0,
+  "base_method": "inpaint",
+  "aux_method": "viterbi",
+  "bst": "fixture",
+  "offsets": {},
+  "scoreboard_rule": false,
+  "events": [
+    {"frame": 10},
+    {"frame": 30},
+    {"frame": 110},
+    {"frame": 130},
+    {"frame": 160},
+    {"frame": 210}
+  ]
+}

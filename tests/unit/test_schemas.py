@@ -80,6 +80,43 @@ def test_invalid_segment_range_is_rejected():
         SegmentsInput.model_validate(payload)
 
 
+def test_segment_accepts_millisecond_quantization_difference():
+    segments = SegmentsInput.model_validate(
+        {
+            "fps": 30,
+            "segments": [
+                {
+                    "start_frame": 22448,
+                    "end_frame": 22492,
+                    "start_sec": 748.267,
+                    "end_sec": 749.733,
+                    "duration_sec": 1.467,
+                }
+            ],
+        }
+    )
+
+    assert segments.segments[0].duration_sec == 1.467
+
+
+def test_segment_rejects_duration_beyond_millisecond_quantization():
+    with pytest.raises(ValidationError, match="within 0.001 seconds"):
+        SegmentsInput.model_validate(
+            {
+                "fps": 30,
+                "segments": [
+                    {
+                        "start_frame": 0,
+                        "end_frame": 30,
+                        "start_sec": 0,
+                        "end_sec": 1,
+                        "duration_sec": 1.01,
+                    }
+                ],
+            }
+        )
+
+
 def test_unknown_fields_are_rejected():
     payload = {"highlights": [], "unexpected": True}
 

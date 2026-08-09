@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from badminton_commentary.analysis.fact_builder import build_rally_facts
+from badminton_commentary.adapters import (
+    CourtPositionToPlayer,
+    StagePaths,
+    build_rally_fact_from_stages,
+    read_upstream_stages,
+)
 from badminton_commentary.analysis.importance import score_importance
 from badminton_commentary.analysis.rally_analyzer import analyze_rally
 from badminton_commentary.generation.planner import plan_commentary
 from badminton_commentary.schemas import (
     CommentaryPlansOutput,
-    EventsInput,
-    HighlightsInput,
     RallyAnalysesOutput,
     RallyFactsOutput,
     ScoredRallyFact,
-    ScoresInput,
-    SegmentsInput,
-    StrokesInput,
 )
 
 
@@ -28,19 +29,25 @@ OUTPUTS_ROOT = REPO_ROOT / "outputs" / "ttyvsasy"
 GROUPS = ("seg0039-0043", "seg0052-0056", "seg0140-0144")
 
 
-def load_model(path: Path, model_type):
-    return model_type.model_validate_json(path.read_text(encoding="utf-8"))
-
-
 def build_clip(group: str) -> RallyFactsOutput:
-    input_root = CLIPS_ROOT / group / "commentary_input"
-    facts = build_rally_facts(
-        segments=load_model(input_root / "segments.json", SegmentsInput),
-        scores=load_model(input_root / "scores.json", ScoresInput),
-        events=load_model(input_root / "events.json", EventsInput),
-        strokes=load_model(input_root / "strokes.json", StrokesInput),
-        highlights=load_model(input_root / "highlights.json", HighlightsInput),
+    clip_root = CLIPS_ROOT / group
+    stages = read_upstream_stages(
+        StagePaths.from_stage_root(clip_root / "stages")
     )
+    mapping_payload = json.loads(
+        (clip_root / "player_mapping.json").read_text(encoding="utf-8")
+    )
+    mapping = CourtPositionToPlayer.model_validate(
+        mapping_payload["court_position_to_player"]
+    )
+    facts = [
+        build_rally_fact_from_stages(
+            stages=stages,
+            segment_index=segment_index,
+            court_position_to_player=mapping,
+        )
+        for segment_index in range(len(stages.match_segmentation.segments))
+    ]
     return RallyFactsOutput(
         rallies=[
             ScoredRallyFact(fact=fact, importance=score_importance(fact))

@@ -1,4 +1,7 @@
-from badminton_commentary.generation.planner import plan_commentary
+from badminton_commentary.generation.planner import (
+    plan_commentary,
+    plan_selected_rally_summary,
+)
 from badminton_commentary.schemas import (
     ImportanceResult,
     RallyFact,
@@ -126,3 +129,29 @@ def test_pattern_precedes_one_representative_stroke():
         "rally:3:stroke:1"
     )
     assert len([item for item in plan.allowed_fact_ids if ":stroke:" in item]) == 1
+
+
+def test_user_selected_rally_summary_does_not_need_importance_score():
+    fact = make_scored_fact(0).fact
+
+    plan = plan_selected_rally_summary(fact)
+
+    assert plan.should_comment is True
+    assert plan.style == "concise"
+    assert plan.focus == ["user_selected_rally"]
+    assert plan.allowed_fact_ids == [
+        "rally:3:score",
+        "rally:3:length",
+        "rally:3:stroke:7",
+    ]
+
+
+def test_user_selected_rally_only_uses_excited_style_for_grounded_highlight():
+    fact = make_scored_fact(0).fact
+    fact.highlight_score = 0.8
+
+    plan = plan_selected_rally_summary(fact)
+
+    assert plan.style == "excited"
+    assert plan.max_sentences == 2
+    assert "rally:3:highlight" in plan.allowed_fact_ids

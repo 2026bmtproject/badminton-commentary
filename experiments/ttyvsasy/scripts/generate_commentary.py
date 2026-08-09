@@ -13,7 +13,10 @@ from badminton_commentary.analysis.rally_analyzer import analyze_rally
 from badminton_commentary.config import load_config
 from badminton_commentary.generation.batch import generate_commentaries
 from badminton_commentary.generation.event_planner import plan_stroke_commentary
-from badminton_commentary.generation.planner import plan_commentary
+from badminton_commentary.generation.planner import (
+    plan_commentary,
+    plan_selected_rally_summary,
+)
 from badminton_commentary.providers import (
     FakeProvider,
     GeminiProvider,
@@ -113,18 +116,24 @@ def fake_event_response(
         ]
     else:
         player = PLAYER_NAMES[analysis.current_stroke.player]
-        stroke_text = {
-            "殺球": f"{player}殺球進攻！",
-            "撲球": f"{player}在網前撲球！",
-            "平快球": f"{player}以平快球回擊。",
-            "切球": f"{player}把球放短。",
-            "小球": f"{player}把球送到網前。",
-            "挑球": f"{player}把球挑高。",
-            "高遠球": f"{player}拉出高遠球。",
-        }.get(
-            analysis.current_stroke.stroke_type,
-            f"{player}處理這一拍。",
-        )
+        if analysis.current_stroke.confidence_band != "reliable":
+            stroke_text = (
+                f"辨識結果顯示，{player}這拍可能是"
+                f"{analysis.current_stroke.stroke_type}。"
+            )
+        else:
+            stroke_text = {
+                "殺球": f"{player}殺球進攻！",
+                "撲球": f"{player}在網前撲球！",
+                "平快球": f"{player}以平快球回擊。",
+                "切球": f"{player}把球放短。",
+                "小球": f"{player}把球送到網前。",
+                "挑球": f"{player}把球挑高。",
+                "高遠球": f"{player}拉出高遠球。",
+            }.get(
+                analysis.current_stroke.stroke_type,
+                f"{player}處理這一拍。",
+            )
         text = stroke_text
         source_fact_ids = [analysis.current_stroke.fact_id]
     return GeneratedStrokeText(
@@ -135,13 +144,14 @@ def fake_event_response(
 
 def fake_rally_batch_response(scored: ScoredRallyFact) -> str:
     event_items = []
-    for analysis in analyze_stroke_events(scored.fact):
+    for analysis in analyze_stroke_events(
+        scored.fact,
+        include_all_strokes=True,
+    ):
         plan = plan_stroke_commentary(
             analysis,
-            importance_score=scored.importance.score,
+            force_commentary=True,
         )
-        if not plan.should_comment:
-            continue
         generated = GeneratedStrokeText.model_validate_json(
             fake_event_response(analysis, plan)
         )
@@ -152,7 +162,10 @@ def fake_rally_batch_response(scored: ScoredRallyFact) -> str:
                 source_fact_ids=generated.source_fact_ids,
             )
         )
-    summary_plan = plan_commentary(scored, analyze_rally(scored.fact))
+    summary_plan = plan_selected_rally_summary(
+        scored.fact,
+        analyze_rally(scored.fact),
+    )
     summary = (
         GeneratedCommentary.model_validate_json(fake_response(scored))
         if summary_plan.should_comment
@@ -229,7 +242,6 @@ def generate_event_group(
                 player_names=PLAYER_NAMES,
             ).generate(
                 rally_fact=scored.fact,
-                importance=scored.importance,
             )
         )
     return EventDrivenCommentaryOutput(rallies=bundles)

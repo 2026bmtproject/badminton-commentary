@@ -5,10 +5,8 @@ from pathlib import Path
 import pytest
 
 from badminton_commentary.analysis import analyze_rally, analyze_stroke_events
-from badminton_commentary.analysis.importance import score_importance
 from badminton_commentary.cli import main as cli_main
-from badminton_commentary.generation.event_planner import plan_stroke_commentary
-from badminton_commentary.generation.planner import plan_commentary
+from badminton_commentary.generation.planner import plan_selected_rally_summary
 from badminton_commentary.generation.rally_batch_commentator import (
     RallyBatchGenerationError,
 )
@@ -20,7 +18,6 @@ from badminton_commentary.schemas import (
     RallyFact,
     RallyFactEvent,
     RallyScore,
-    ScoredRallyFact,
 )
 from badminton_commentary.services import RallyCommentaryService
 from badminton_commentary.services import rally_commentary as service_module
@@ -57,27 +54,27 @@ def rally_fact() -> RallyFact:
 
 
 def valid_response(fact: RallyFact) -> str:
-    importance = score_importance(fact)
-    scored = ScoredRallyFact(fact=fact, importance=importance)
     event_items = []
-    for analysis in analyze_stroke_events(fact):
-        plan = plan_stroke_commentary(
-            analysis,
-            importance_score=importance.score,
-        )
-        if not plan.should_comment:
-            continue
-        local = analysis.local_facts[0]
+    for analysis in analyze_stroke_events(fact, include_all_strokes=True):
+        local = analysis.local_facts[0] if analysis.local_facts else None
         event_items.append(
             GeneratedStrokeBatchItem(
                 stroke_index=analysis.stroke_index,
-                text=f"{local.commentary_hint}。",
-                source_fact_ids=[local.fact_id, *local.supporting_fact_ids],
+                text=(
+                    f"{local.commentary_hint}。"
+                    if local is not None
+                    else f"這拍是{analysis.current_stroke.stroke_type}。"
+                ),
+                source_fact_ids=(
+                    [local.fact_id, *local.supporting_fact_ids]
+                    if local is not None
+                    else [analysis.current_stroke.fact_id]
+                ),
             )
         )
 
     analysis = analyze_rally(fact)
-    summary_plan = plan_commentary(scored, analysis)
+    summary_plan = plan_selected_rally_summary(fact, analysis)
     pattern = next(
         item
         for item in analysis.patterns
@@ -135,7 +132,13 @@ def test_user_selected_low_importance_rally_still_uses_one_provider_call():
     )
     response = GeneratedRallyTextBatch(
         segment_index=38,
-        events=[],
+        events=[
+            GeneratedStrokeBatchItem(
+                stroke_index=0,
+                text="這拍是發球。",
+                source_fact_ids=["rally:38:stroke:0"],
+            )
+        ],
         summary=GeneratedCommentary(
             segment_index=38,
             text="目前比分是 3 比 1。",
@@ -146,7 +149,7 @@ def test_user_selected_low_importance_rally_still_uses_one_provider_call():
 
     result = RallyCommentaryService(provider=provider).generate(rally_fact=fact)
 
-    assert result.events == []
+    assert [event.stroke_index for event in result.events] == [0]
     assert result.summary is not None
     assert result.summary.source_fact_ids == ["rally:38:score"]
     assert len(provider.calls) == 1
@@ -191,6 +194,7 @@ def test_service_has_no_experiment_or_subtitle_runtime_dependency():
     assert "fixtures" not in source
     assert "subtitles" not in source
     assert "ffmpeg" not in source.lower()
+    assert "score_importance" not in source
 
 
 def test_generic_cli_generates_one_rally_offline(tmp_path):

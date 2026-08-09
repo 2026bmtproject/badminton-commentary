@@ -23,8 +23,12 @@ workspace/
     └── seg0140-0144/
 ```
 
-每組 selected clip 包含 `source_mapping.json`、`commentary_input/` 與原始合併影片。
+每組 selected clip 包含 `source_mapping.json`、各 stage artifacts 與原始合併影片。
 Pose/MMPose 不屬於本 commentary experiment，也不再是 split script 的輸入。
+
+`build_facts.py` 直接以 production `StagePaths`、Upstream Stage Adapter 和 Fact Builder
+讀取 `selected_clips/{group}/stages/`。既有 `commentary_input/` 僅是研究期間留下的
+normalized inspection artifacts，不是 production 或目前 experiment build 的必要輸入。
 
 ## Outputs
 
@@ -55,6 +59,39 @@ uv run python .\experiments\ttyvsasy\scripts\split_stages.py
 uv run python .\experiments\ttyvsasy\scripts\build_facts.py
 ```
 
+直接從完整主系統 stages 測試單一 rally（不經 `commentary_input` 或預建 facts）：
+
+```powershell
+uv run python .\experiments\ttyvsasy\scripts\generate_selected_rally.py `
+  --segment-index 39 `
+  --top-player a `
+  --bottom-player b `
+  --provider fake `
+  --overwrite
+```
+
+使用 Gemini：
+
+```powershell
+uv run python .\experiments\ttyvsasy\scripts\generate_selected_rally.py `
+  --segment-index 39 `
+  --top-player a `
+  --bottom-player b `
+  --provider gemini `
+  --config .\config.yaml `
+  --overwrite
+```
+
+`top/bottom` 是該 segment 的場上位置；請依 identity frame／已知換邊狀態明確指定。
+目前已確認的三組 evaluation mapping：
+
+- segment 39–43：`top=a`、`bottom=b`
+- segment 52–56：`top=b`、`bottom=a`
+- segment 140–144：`top=b`、`bottom=a`
+
+腳本會在 commentary JSON 旁保留 Fact Builder 的 `rally_fact.json`；可用
+`--fact-output` 改變位置。
+
 FakeProvider 離線 smoke test：
 
 ```powershell
@@ -72,8 +109,9 @@ uv run python .\experiments\ttyvsasy\scripts\generate_commentary.py `
   --config .\config.yaml
 ```
 
-同一 rally 的 selected events 與 summary 透過 `RallyCommentaryService` 一次送出，因此
-完整三組正常是 15 次 Gemini calls。
+同一 rally 的所有可描述 strokes（包含發球、一般回球與低 confidence 結果）及 summary
+透過 `RallyCommentaryService` 一次送出，因此完整三組正常是 15 次 Gemini calls。stroke
+數量會增加單次 request 的內容與輸出長度，但不會增加每個 rally 的 API call 次數。
 
 只建立 ASS：
 
