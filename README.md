@@ -2,7 +2,8 @@
 
 將 Badminton Analysis System 的 stage outputs 轉成可追溯的繁體中文即時賽評。
 
-正式 runtime 回傳 structured JSON；不負責影片分析、Pose、TTS、FFmpeg 或前端播放。
+正式 runtime 回傳 structured JSON；讀取既有 stage artifacts，但不執行電腦視覺模型、
+TTS、FFmpeg 或前端播放。
 
 ## Production pipeline
 
@@ -11,21 +12,21 @@ Badminton Analysis System
 │
 ├── match_segmentation ─┐
 ├── event_detection ────┤
-├── score_recognition ──┤ current inputs
+├── score_recognition ──┤
 ├── stroke_classification
 │                       │
-├── court_detection ────┤ future
-├── shuttle_tracking ───┤ future
-└── pose ────────────────┘ future
+├── court_detection ────┤
+├── shuttle_tracking ───┤
+└── pose ────────────────┘
                         ↓
                 Upstream Stage Adapter
                         ↓
-                    Fact Builder
+          RallyFact + CompactRallyFacts
                         ↓
-                     RallyFact
-                        ↓
+          ┌──────── current ────────┐
 Stroke Event Analyzer ── Event Planner
 Rally Analyzer        ── Rally Planner
+          └─────────────────────────┘
         ↓
 Rally Commentary Service
         ↓
@@ -36,11 +37,15 @@ Pydantic + provenance Validators
 RallyCommentaryBundle JSON
         ↓
 frontend / Badminton Analysis System adapter
+
+Future Milestone 3:
+CompactRallyFacts → Gemini Tactical Analyzer → TacticalFact[]
+→ Planner → Gemini Commentator → RallyCommentaryBundle
 ```
 
 `RallyFact` 是 badminton-commentary 內部的 canonical domain representation，不是要求
-Badminton Analysis System 預先建立的外部資料格式。court、shuttle 與 pose 目前只有
-filesystem path extension hooks；尚未轉成 facts，也不會送入 Gemini prompt。
+Badminton Analysis System 預先建立的外部資料格式。`CompactRallyFacts` 則是 selected
+segment 的 verified multimodal representation；目前已建立但尚未送入 Gemini prompt。
 
 正式使用情境是一位使用者選取一個已分析完成的 rally。使用者的選擇本身就是啟動條件；
 該 rally 中所有具有球種與 confidence 的 strokes（包含普通發球與低 confidence 結果）
@@ -60,7 +65,10 @@ from badminton_commentary.adapters import (
     read_upstream_stages,
 )
 
-stages = read_upstream_stages(StagePaths.from_stage_root(match_path / "stages"))
+stages = read_upstream_stages(
+    StagePaths.from_stage_root(match_path / "stages"),
+    segment_index=37,
+)
 service = RallyCommentaryService(provider=provider, player_names=player_names)
 
 bundle = service.generate_from_stages(
@@ -71,8 +79,8 @@ bundle = service.generate_from_stages(
 ```
 
 Filesystem reader 是外層便利功能；核心 adapter 接受 typed `UpstreamStageData`，不自行尋找
-固定資料夾。`StagePaths` 中的 `court_detection`、`shuttle_tracking`、`pose` 目前只保留
-未來擴充位置，不會被 reader 解析。
+固定資料夾。指定 `segment_index` 時，reader 會串流 pose/shuttle 大型 JSON array，只保留
+該 segment，並讀取小型 court calibration；未指定時維持舊行為，只讀四個核心 stages。
 
 主系統原始 `stroke_classification.player` 是場上位置 `top/bottom`，而比分使用固定球員
 代號 `a/b`。目前 stages 沒有提供兩者的身分關係，因此 caller 必須明確提供所選 segment
@@ -86,7 +94,16 @@ rally_fact = service.prepare_rally_fact(
     segment_index=37,
     court_position_to_player=position_mapping,
 )
+
+compact_facts = service.prepare_compact_facts(
+    stages=stages,
+    segment_index=37,
+    court_position_to_player=position_mapping,
+)
 ```
+
+Compact schema、演算法與品質 gate 詳見
+[docs/compact-facts.md](docs/compact-facts.md)。
 
 既有較低階 API 保留：
 
@@ -241,6 +258,7 @@ badminton-commentary/
 ├── src/badminton_commentary/
 │   ├── analysis/           # deterministic facts and patterns
 │   ├── adapters/           # main-system stage schemas/readers/normalization
+│   ├── facts/              # compact multimodal schemas and feature builder
 │   ├── generation/         # planners, batch generator, validators
 │   ├── providers/          # replaceable LLM providers
 │   ├── services/           # production public orchestration boundary

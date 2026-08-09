@@ -1,3 +1,8 @@
+from badminton_commentary.facts import (
+    CompactFactConfig,
+    CompactRallyFacts,
+    build_compact_rally_facts,
+)
 from badminton_commentary.services import (
     RallyCommentaryService,
     generate_rally_commentary,
@@ -5,7 +10,10 @@ from badminton_commentary.services import (
 )
 
 __all__ = [
+    "CompactFactConfig",
+    "CompactRallyFacts",
     "RallyCommentaryService",
+    "build_compact_rally_facts",
     "generate_rally_commentary",
     "generate_rally_commentary_from_stages",
 ]

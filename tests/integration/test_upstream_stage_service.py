@@ -112,3 +112,18 @@ def test_stages_entrypoint_keeps_provenance_validation():
             segment_index=1,
             court_position_to_player=mapping,
         )
+
+
+def test_service_prepares_compact_facts_without_calling_provider():
+    stages = read_upstream_stages(StagePaths.from_stage_root(FIXTURE_ROOT))
+    provider = FakeProvider(response="not used")
+
+    compact = RallyCommentaryService(provider=provider).prepare_compact_facts(
+        stages=stages,
+        segment_index=1,
+        court_position_to_player=CourtPositionToPlayer(top="b", bottom="a"),
+    )
+
+    assert [item.event_index for item in compact.events] == [2, 3, 4]
+    assert compact.schema_version == "compact-rally-facts-v1"
+    assert provider.calls == []

@@ -12,14 +12,18 @@ contract。內容來自實際 TTYvsASY artifacts 與主系統 `modules/contracts
 | `event_detection/events.json` | `events[].frame` | 每拍只有絕對 frame，沒有 player 或 segment index |
 | `score_recognition/scores.json` | `rallies[].segment_index/score_a/score_b/server/game_index` | `a/b` 是固定球員／記分板列，不是場上 top/bottom |
 | `stroke_classification/strokes.json` | `event_index/frame/segment_index/player/stroke_type/confidence` | `event_index` 指向 `events` 陣列；player 是場上 `top/bottom` 或 unknown |
+| `pose/pose.json` | `frames[].frame/segment_index/player/keypoints/bbox` | keypoints 是 17 點 COCO layout；raw confidence 可能略大於 1 |
+| `court_detection/court.json` | `courts[].corners/homography/segment_index`, `confirmed`, `detection_failed` | homography 為 court coordinates 到 image coordinates；未 confirmed 不建立位置 facts |
+| `shuttle_tracking/shuttle.json` | `points[].frame/segment_index/method/x/y/visible/confidence` | 同一 frame 可能有多種 method；使用 stroke stage 指定的 `shuttle_method` |
 | `audio_highlight/highlights.json` | `segment_index/score` | optional；目前 TTYvsASY 沒有這個正式 stage |
 
 主系統的 segment 秒數目前以三位小數輸出。因 `start_sec`、`end_sec`、`duration_sec` 分別
 量化到毫秒，`duration_sec` 與 `end_sec - start_sec` 允許最多 `0.001` 秒差異；超過此範圍
 仍視為契約錯誤。Adapter 不會修改上游檔案。
 
-`court_detection`、`shuttle_tracking`、`pose` 目前不是 commentary fact source。`StagePaths`
-保留 optional path hook，但 reader 不解析它們，Fact Builder、Analyzer 與 prompt 都不依賴它們。
+指定 `segment_index` 時，reader 會將 pose 的 `frames` 與 shuttle 的 `points` 逐筆串流驗證，
+只保留 requested segment。這避免在 typed stage data 中持有整場 156 MB pose；因上游目前是
+單一 JSON array，filesystem 仍需順序掃描整個檔案。未指定 segment 時不讀三個 vision stages。
 
 ## Player identity boundary
 
@@ -50,6 +54,15 @@ CourtPositionToPlayer(top="b", bottom="a")
 7. 呼叫 production `build_rally_facts()` 完成 score/event/stroke join。
 8. 回傳單一 `RallyFact`，保留原始全場 event index 供 provenance 使用。
 
+Compact Fact Builder 再執行：
+
+1. 以 event frame 和 `top/bottom` 找最近 pose（預設最多差 2 frames）。
+2. 將 17 keypoints 壓縮成 confidence、arm extension、stance、shoulder angle 等幾何特徵。
+3. court 只有 `confirmed=true` 且 homography 可逆時才建立相對區域與位移 facts。
+4. shuttle 只使用 `stroke_classification.shuttle_method`，在 event 前後各 6 frames 建立
+   image-space unit vectors；不推論速度或三維落點。
+5. 產生 `CompactRallyFacts`；不包含 raw keypoints、homography 或逐 frame shuttle arrays。
+
 若 `scores.json` 的 `sub_scores` 表示一個 segment 內恢復出多個 rallies，目前會明確拒絕；
 現有 `RallyFact` 尚無 sub-rally identifier，不能安全地自行選擇其中一個。
 
@@ -65,7 +78,7 @@ CourtPositionToPlayer(top="b", bottom="a")
 
 已移入 production adapter 的工作：
 
-- 解析主系統四個 consumed stage schemas。
+- 解析主系統七個 stage schemas。
 - 依 segment frame range 選 event。
 - 驗證並 join event/stroke。
 - `top/bottom` 到 `a/b` 的 typed mapping。

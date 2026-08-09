@@ -24,6 +24,8 @@ from badminton_commentary.schemas import (
     StrokesInput,
 )
 
+from .vision import SelectedVisionStages, read_selected_vision_stages
+
 
 CourtPosition = Literal["top", "bottom"]
 
@@ -78,6 +80,7 @@ class ScoreRecognitionStage(UpstreamEnvelope):
 
 class StrokeClassificationStage(UpstreamEnvelope):
     strokes: list[UpstreamStroke]
+    shuttle_method: str | None = None
 
 
 class HighlightStage(UpstreamEnvelope):
@@ -92,6 +95,7 @@ class UpstreamStageData(UpstreamRecord):
     score_recognition: ScoreRecognitionStage
     stroke_classification: StrokeClassificationStage
     highlights: HighlightStage | None = None
+    vision: SelectedVisionStages | None = None
 
 
 class CourtPositionToPlayer(UpstreamRecord):
@@ -111,7 +115,7 @@ class CourtPositionToPlayer(UpstreamRecord):
 
 
 class StagePaths(UpstreamRecord):
-    """Filesystem boundary; optional future stages are not parsed or consumed yet."""
+    """Filesystem boundary for required and optional upstream stage artifacts."""
 
     match_segmentation: Path
     event_detection: Path
@@ -153,17 +157,29 @@ def _read_json_object(path: Path) -> dict[str, object]:
     return payload
 
 
-def read_upstream_stages(paths: StagePaths) -> UpstreamStageData:
-    """Read only the stages currently consumed by commentary."""
+def read_upstream_stages(
+    paths: StagePaths,
+    *,
+    segment_index: int | None = None,
+) -> UpstreamStageData:
+    """Read core stages and optionally stream one segment's vision artifacts."""
+    match_segmentation = MatchSegmentationStage.model_validate(
+        _read_json_object(paths.match_segmentation)
+    )
+    if segment_index is not None and not 0 <= segment_index < len(
+        match_segmentation.segments
+    ):
+        raise ValueError(
+            f"segment_index {segment_index} is out of range for "
+            f"{len(match_segmentation.segments)} segments"
+        )
     highlights = (
         HighlightStage.model_validate(_read_json_object(paths.highlights))
         if paths.highlights is not None
         else None
     )
     return UpstreamStageData(
-        match_segmentation=MatchSegmentationStage.model_validate(
-            _read_json_object(paths.match_segmentation)
-        ),
+        match_segmentation=match_segmentation,
         event_detection=EventDetectionStage.model_validate(
             _read_json_object(paths.event_detection)
         ),
@@ -174,6 +190,17 @@ def read_upstream_stages(paths: StagePaths) -> UpstreamStageData:
             _read_json_object(paths.stroke_classification)
         ),
         highlights=highlights,
+        vision=(
+            read_selected_vision_stages(
+                segment_index=segment_index,
+                fps=match_segmentation.fps,
+                pose_path=paths.pose,
+                court_path=paths.court_detection,
+                shuttle_path=paths.shuttle_tracking,
+            )
+            if segment_index is not None
+            else None
+        ),
     )
 
 

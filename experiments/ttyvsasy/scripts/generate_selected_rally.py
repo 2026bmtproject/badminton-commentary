@@ -15,6 +15,7 @@ from badminton_commentary.adapters import (
 )
 from badminton_commentary.analysis import analyze_rally, analyze_stroke_events
 from badminton_commentary.config import load_config
+from badminton_commentary.facts import build_compact_rally_facts
 from badminton_commentary.generation.planner import plan_selected_rally_summary
 from badminton_commentary.providers import FakeProvider, GeminiProvider, LLMProvider
 from badminton_commentary.schemas import (
@@ -107,6 +108,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="RallyFact JSON path; defaults beside the commentary output.",
     )
+    parser.add_argument(
+        "--compact-output",
+        type=Path,
+        help="CompactRallyFacts JSON path; defaults beside commentary output.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args(argv)
 
@@ -120,8 +126,13 @@ def main(argv: list[str] | None = None) -> None:
         / f"commentary_{args.provider}.json"
     )
     fact_output_path = args.fact_output or output_path.with_name("rally_fact.json")
+    compact_output_path = args.compact_output or output_path.with_name(
+        "compact_facts.json"
+    )
     existing_outputs = [
-        path for path in (output_path, fact_output_path) if path.exists()
+        path
+        for path in (output_path, fact_output_path, compact_output_path)
+        if path.exists()
     ]
     if existing_outputs and not args.overwrite:
         raise FileExistsError(
@@ -132,7 +143,10 @@ def main(argv: list[str] | None = None) -> None:
         top=args.top_player,
         bottom=args.bottom_player,
     )
-    stages = read_upstream_stages(StagePaths.from_stage_root(STAGE_ROOT))
+    stages = read_upstream_stages(
+        StagePaths.from_stage_root(STAGE_ROOT),
+        segment_index=args.segment_index,
+    )
     fact = build_rally_fact_from_stages(
         stages=stages,
         segment_index=args.segment_index,
@@ -141,6 +155,15 @@ def main(argv: list[str] | None = None) -> None:
     fact_output_path.parent.mkdir(parents=True, exist_ok=True)
     fact_output_path.write_text(
         fact.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    compact = build_compact_rally_facts(
+        stages=stages,
+        segment_index=args.segment_index,
+        court_position_to_player=mapping,
+    )
+    compact_output_path.write_text(
+        compact.model_dump_json(indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -168,7 +191,16 @@ def main(argv: list[str] | None = None) -> None:
     )
     print(f"output: {output_path.resolve()}")
     print(f"rally_fact: {fact_output_path.resolve()}")
+    print(f"compact_facts: {compact_output_path.resolve()}")
     print(f"segment: {fact.segment_index}; strokes: {fact.rally_length}")
+    print(
+        "compact: "
+        f"pose={sum(item.pose is not None for item in compact.events)}, "
+        f"court={sum(item.court_position is not None for item in compact.events)}, "
+        f"shuttle={sum(item.shuttle_path is not None for item in compact.events)}"
+    )
+    if compact.warnings:
+        print(f"compact_warnings: {', '.join(compact.warnings)}")
     if isinstance(provider, FakeProvider):
         print(f"provider_calls: {len(provider.calls)}")
     print(f"elapsed: {time.perf_counter() - started:.3f}s")

@@ -89,8 +89,9 @@ uv run python .\experiments\ttyvsasy\scripts\generate_selected_rally.py `
 - segment 52–56：`top=b`、`bottom=a`
 - segment 140–144：`top=b`、`bottom=a`
 
-腳本會在 commentary JSON 旁保留 Fact Builder 的 `rally_fact.json`；可用
-`--fact-output` 改變位置。
+腳本會在 commentary JSON 旁保留 `rally_fact.json` 與 `compact_facts.json`；可分別用
+`--fact-output`、`--compact-output` 改變位置。Compact facts 目前只供 inspection 與下一階段
+Tactical Analyzer 使用，尚未送進現有 Gemini Commentator。
 
 FakeProvider 離線 smoke test：
 

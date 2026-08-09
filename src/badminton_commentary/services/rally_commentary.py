@@ -7,6 +7,11 @@ from badminton_commentary.adapters import (
     UpstreamStageData,
     build_rally_fact_from_stages,
 )
+from badminton_commentary.facts import (
+    CompactFactConfig,
+    CompactRallyFacts,
+    build_compact_rally_facts,
+)
 from badminton_commentary.generation.rally_batch_commentator import (
     generate_rally_commentary_batch,
 )
@@ -69,6 +74,22 @@ class RallyCommentaryService:
             stages=stages,
             segment_index=segment_index,
             court_position_to_player=court_position_to_player,
+        )
+
+    def prepare_compact_facts(
+        self,
+        *,
+        stages: UpstreamStageData,
+        segment_index: int,
+        court_position_to_player: CourtPositionToPlayer | None,
+        config: CompactFactConfig | None = None,
+    ) -> CompactRallyFacts:
+        """Build compact multimodal facts without invoking the provider."""
+        return build_compact_rally_facts(
+            stages=stages,
+            segment_index=segment_index,
+            court_position_to_player=court_position_to_player,
+            config=config,
         )
 
     def generate_from_stages(
