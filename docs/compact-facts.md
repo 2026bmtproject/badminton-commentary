@@ -40,14 +40,22 @@ Court homography 實際方向是 court coordinates 到 image coordinates，build
 腳踝中點投影到 6.1 m × 13.4 m court。缺腳踝時可降級使用 bbox bottom center，quality 為
 `cautious`。
 
-只有 `confirmed=true`、`detection_failed=false`、calibration 唯一且矩陣可逆時才輸出：
+預設 policy 將 court calibration 視為已由使用者／上游流程驗證，因此即使 artifact 的
+`confirmed=false` 也會嘗試投影，並在 fact limitation 記錄
+`court_calibration_prevalidated_by_policy`。若需要嚴格遵守上游旗標，可設定：
+
+```python
+CompactFactConfig(require_court_confirmation=True)
+```
+
+Calibration 仍必須 `detection_failed=false`、唯一且矩陣可逆，才會輸出：
 
 - normalized x/y。
 - left/center/right。
 - 對該球員而言的 rear/mid/front。
 - 與同一球員上次 hit position 的 court-plane displacement。
 
-目前 TTYvsASY court 為 `confirmed=false`，所以正確結果是 `court_position=null` 與
+嚴格模式下，TTYvsASY 的 `confirmed=false` 會得到 `court_position=null` 與
 `court_calibration_unconfirmed` warning。
 
 ## Shuttle features

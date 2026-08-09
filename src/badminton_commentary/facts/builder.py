@@ -45,6 +45,7 @@ class CompactFactConfig:
     pose_keypoint_confidence: float = 0.5
     shuttle_window_frames: int = 6
     shuttle_confidence: float = 0.5
+    require_court_confirmation: bool = False
 
     def __post_init__(self) -> None:
         if self.pose_max_frame_delta < 0:
@@ -402,6 +403,8 @@ def _position_for_player(
 def _select_calibration(
     stages: UpstreamStageData,
     segment_index: int,
+    *,
+    require_confirmation: bool,
 ) -> tuple[CourtCalibration | None, str | None]:
     vision = stages.vision
     if vision is None or vision.court_detection is None:
@@ -409,7 +412,7 @@ def _select_calibration(
     court = vision.court_detection
     if court.detection_failed:
         return None, "court_detection_failed"
-    if not court.confirmed:
+    if require_confirmation and not court.confirmed:
         return None, "court_calibration_unconfirmed"
     exact = [item for item in court.courts if item.segment_index == segment_index]
     global_items = [item for item in court.courts if item.segment_index is None]
@@ -446,7 +449,11 @@ def build_compact_rally_facts(
         warnings.append("pose_stage_missing")
     if shuttle_stage is None:
         warnings.append("shuttle_stage_missing")
-    calibration, court_warning = _select_calibration(stages, segment_index)
+    calibration, court_warning = _select_calibration(
+        stages,
+        segment_index,
+        require_confirmation=resolved_config.require_court_confirmation,
+    )
     if court_warning is not None:
         warnings.append(court_warning)
 
@@ -514,6 +521,18 @@ def build_compact_rally_facts(
         )
         if calibration is not None and raw_pose is not None and court_fact is None:
             event_warnings.append("court_position_projection_failed")
+        court_stage = (
+            stages.vision.court_detection if stages.vision is not None else None
+        )
+        if court_fact is not None and court_stage is not None and not court_stage.confirmed:
+            court_fact = court_fact.model_copy(
+                update={
+                    "limitations": [
+                        *court_fact.limitations,
+                        "court_calibration_prevalidated_by_policy",
+                    ]
+                }
+            )
         if court_fact is not None and event.player is not None:
             previous = previous_court_by_player.get(event.player)
             if previous is not None:

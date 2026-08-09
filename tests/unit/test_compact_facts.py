@@ -12,7 +12,7 @@ from badminton_commentary.adapters import (
     StagePaths,
     read_upstream_stages,
 )
-from badminton_commentary.facts import build_compact_rally_facts
+from badminton_commentary.facts import CompactFactConfig, build_compact_rally_facts
 
 
 FIXTURE_ROOT = Path(__file__).parents[2] / "fixtures" / "upstream_stages"
@@ -123,11 +123,27 @@ def test_compact_builder_joins_multimodal_features_without_raw_arrays():
     assert compact.warnings == []
 
 
-def test_unconfirmed_court_disables_position_facts():
+def test_unconfirmed_court_is_prevalidated_by_default():
     compact = build_compact_rally_facts(
         stages=stages_with_vision(court_confirmed=False),
         segment_index=1,
         court_position_to_player=CourtPositionToPlayer(top="b", bottom="a"),
+    )
+
+    assert all(item.court_position is not None for item in compact.events)
+    assert all(
+        "court_calibration_prevalidated_by_policy" in item.court_position.limitations
+        for item in compact.events
+    )
+    assert "court_calibration_unconfirmed" not in compact.warnings
+
+
+def test_strict_court_policy_requires_upstream_confirmation():
+    compact = build_compact_rally_facts(
+        stages=stages_with_vision(court_confirmed=False),
+        segment_index=1,
+        court_position_to_player=CourtPositionToPlayer(top="b", bottom="a"),
+        config=CompactFactConfig(require_court_confirmation=True),
     )
 
     assert all(item.court_position is None for item in compact.events)

@@ -13,7 +13,7 @@ contract。內容來自實際 TTYvsASY artifacts 與主系統 `modules/contracts
 | `score_recognition/scores.json` | `rallies[].segment_index/score_a/score_b/server/game_index` | `a/b` 是固定球員／記分板列，不是場上 top/bottom |
 | `stroke_classification/strokes.json` | `event_index/frame/segment_index/player/stroke_type/confidence` | `event_index` 指向 `events` 陣列；player 是場上 `top/bottom` 或 unknown |
 | `pose/pose.json` | `frames[].frame/segment_index/player/keypoints/bbox` | keypoints 是 17 點 COCO layout；raw confidence 可能略大於 1 |
-| `court_detection/court.json` | `courts[].corners/homography/segment_index`, `confirmed`, `detection_failed` | homography 為 court coordinates 到 image coordinates；未 confirmed 不建立位置 facts |
+| `court_detection/court.json` | `courts[].corners/homography/segment_index`, `confirmed`, `detection_failed` | homography 為 court coordinates 到 image coordinates；預設視為外部已驗證，可切換嚴格 confirmed gate |
 | `shuttle_tracking/shuttle.json` | `points[].frame/segment_index/method/x/y/visible/confidence` | 同一 frame 可能有多種 method；使用 stroke stage 指定的 `shuttle_method` |
 | `audio_highlight/highlights.json` | `segment_index/score` | optional；目前 TTYvsASY 沒有這個正式 stage |
 
@@ -58,7 +58,8 @@ Compact Fact Builder 再執行：
 
 1. 以 event frame 和 `top/bottom` 找最近 pose（預設最多差 2 frames）。
 2. 將 17 keypoints 壓縮成 confidence、arm extension、stance、shoulder angle 等幾何特徵。
-3. court 只有 `confirmed=true` 且 homography 可逆時才建立相對區域與位移 facts。
+3. court 預設視為外部已驗證；calibration 唯一且 homography 可逆時建立相對區域與位移
+   facts。嚴格模式才要求 `confirmed=true`。
 4. shuttle 只使用 `stroke_classification.shuttle_method`，在 event 前後各 6 frames 建立
    image-space unit vectors；不推論速度或三維落點。
 5. 產生 `CompactRallyFacts`；不包含 raw keypoints、homography 或逐 frame shuttle arrays。
