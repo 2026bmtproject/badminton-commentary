@@ -13,9 +13,18 @@ from badminton_commentary.adapters import (
     build_rally_fact_from_stages,
     read_upstream_stages,
 )
-from badminton_commentary.analysis import analyze_rally, analyze_stroke_events
+from badminton_commentary.analysis import (
+    analyze_rally,
+    analyze_stroke_events,
+    analyze_tactical_facts,
+)
 from badminton_commentary.config import load_config
-from badminton_commentary.facts import build_compact_rally_facts
+from badminton_commentary.facts import (
+    CompactRallyFacts,
+    GeneratedTacticalAnalysis,
+    GeneratedTacticalFact,
+    build_compact_rally_facts,
+)
 from badminton_commentary.generation.planner import plan_selected_rally_summary
 from badminton_commentary.providers import FakeProvider, GeminiProvider, LLMProvider
 from badminton_commentary.schemas import (
@@ -93,6 +102,36 @@ def _fake_response(fact: RallyFact) -> str:
     ).model_dump_json()
 
 
+def _fake_tactical_response(compact: CompactRallyFacts) -> str:
+    if len(compact.events) < 2:
+        return GeneratedTacticalAnalysis(
+            segment_index=compact.segment_index,
+            facts=[],
+        ).model_dump_json()
+    first, second = compact.events[:2]
+    players = list(
+        dict.fromkeys(
+            player for player in (first.player, second.player) if player is not None
+        )
+    )
+    return GeneratedTacticalAnalysis(
+        segment_index=compact.segment_index,
+        facts=[
+            GeneratedTacticalFact(
+                pattern_type="notable_stroke_sequence",
+                description="這兩拍形成一段連續球路銜接。",
+                confidence=0.8,
+                salience=0.6,
+                start_event_index=first.event_index,
+                end_event_index=second.event_index,
+                players=players,
+                evidence_fact_ids=[first.fact_id, second.fact_id],
+                limitations=["測試用固定戰術分析"],
+            )
+        ],
+    ).model_dump_json()
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate one TTYvsASY rally directly from full stages.",
@@ -113,6 +152,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="CompactRallyFacts JSON path; defaults beside commentary output.",
     )
+    parser.add_argument(
+        "--tactical-output",
+        type=Path,
+        help="TacticalFact JSON path; defaults beside commentary output.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args(argv)
 
@@ -129,9 +173,17 @@ def main(argv: list[str] | None = None) -> None:
     compact_output_path = args.compact_output or output_path.with_name(
         "compact_facts.json"
     )
+    tactical_output_path = args.tactical_output or output_path.with_name(
+        "tactical_facts.json"
+    )
     existing_outputs = [
         path
-        for path in (output_path, fact_output_path, compact_output_path)
+        for path in (
+            output_path,
+            fact_output_path,
+            compact_output_path,
+            tactical_output_path,
+        )
         if path.exists()
     ]
     if existing_outputs and not args.overwrite:
@@ -162,18 +214,39 @@ def main(argv: list[str] | None = None) -> None:
         segment_index=args.segment_index,
         court_position_to_player=mapping,
     )
+    compact_output_path.parent.mkdir(parents=True, exist_ok=True)
     compact_output_path.write_text(
         compact.model_dump_json(indent=2) + "\n",
         encoding="utf-8",
     )
 
+    config = load_config(args.config) if args.provider == "gemini" else None
     provider: LLMProvider
+    tactical_provider: LLMProvider
     if args.provider == "fake":
         provider = FakeProvider(response=_fake_response(fact))
+        tactical_provider = FakeProvider(response=_fake_tactical_response(compact))
     else:
+        assert config is not None
         provider = GeminiProvider.from_config(
-            load_config(args.config).provider.gemini
+            config.provider.gemini
         )
+        tactical_provider = GeminiProvider.from_config(
+            config.provider.gemini,
+            model_override=config.tactical_analyzer.model,
+            fallback_models=config.tactical_analyzer.fallback_models,
+        )
+
+    tactical = analyze_tactical_facts(
+        provider=tactical_provider,
+        compact_facts=compact,
+        max_facts=config.tactical_analyzer.max_facts if config is not None else 5,
+    )
+    tactical_output_path.parent.mkdir(parents=True, exist_ok=True)
+    tactical_output_path.write_text(
+        tactical.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     bundle = RallyCommentaryService(
         provider=provider,
@@ -192,6 +265,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"output: {output_path.resolve()}")
     print(f"rally_fact: {fact_output_path.resolve()}")
     print(f"compact_facts: {compact_output_path.resolve()}")
+    print(f"tactical_facts: {tactical_output_path.resolve()}")
     print(f"segment: {fact.segment_index}; strokes: {fact.rally_length}")
     print(
         "compact: "
@@ -201,8 +275,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     if compact.warnings:
         print(f"compact_warnings: {', '.join(compact.warnings)}")
+    print(f"tactical_patterns: {len(tactical.facts)}")
+    if tactical.provider_model is not None:
+        print(f"tactical_model: {tactical.provider_model}")
+    if tactical.warnings:
+        print(f"tactical_warnings: {', '.join(tactical.warnings)}")
     if isinstance(provider, FakeProvider):
-        print(f"provider_calls: {len(provider.calls)}")
+        assert isinstance(tactical_provider, FakeProvider)
+        print(f"tactical_provider_calls: {len(tactical_provider.calls)}")
+        print(f"commentary_provider_calls: {len(provider.calls)}")
     print(f"elapsed: {time.perf_counter() - started:.3f}s")
 
 

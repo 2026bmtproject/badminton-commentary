@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .schemas import StrictModel
 
@@ -14,6 +14,23 @@ class GeminiConfig(StrictModel):
     max_attempts: int = Field(default=3, ge=1)
 
 
+class TacticalAnalyzerConfig(StrictModel):
+    model: str = "gemini-3.1-pro-preview"
+    fallback_models: list[str] = Field(
+        default_factory=lambda: ["gemini-3.6-flash"]
+    )
+    max_facts: int = Field(default=5, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def validate_models(self) -> "TacticalAnalyzerConfig":
+        models = [self.model, *self.fallback_models]
+        if any(not model.strip() for model in models):
+            raise ValueError("tactical analyzer models must not be empty")
+        if len(set(models)) != len(models):
+            raise ValueError("tactical analyzer models must be unique")
+        return self
+
+
 class ProviderConfig(StrictModel):
     name: Literal["fake", "gemini"] = "fake"
     fake_response: str = "測試用固定賽評"
@@ -22,6 +39,9 @@ class ProviderConfig(StrictModel):
 
 class AppConfig(StrictModel):
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    tactical_analyzer: TacticalAnalyzerConfig = Field(
+        default_factory=TacticalAnalyzerConfig
+    )
 
 
 def load_config(path: str | Path) -> AppConfig:

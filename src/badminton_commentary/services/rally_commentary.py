@@ -10,8 +10,10 @@ from badminton_commentary.adapters import (
 from badminton_commentary.facts import (
     CompactFactConfig,
     CompactRallyFacts,
+    TacticalAnalysisResult,
     build_compact_rally_facts,
 )
+from badminton_commentary.analysis import analyze_tactical_facts
 from badminton_commentary.generation.rally_batch_commentator import (
     generate_rally_commentary_batch,
 )
@@ -33,8 +35,10 @@ class RallyCommentaryService:
         *,
         provider: LLMProvider,
         player_names: Mapping[Player, str] | None = None,
+        tactical_provider: LLMProvider | None = None,
     ) -> None:
         self._provider = provider
+        self._tactical_provider = tactical_provider
         self._player_names = dict(player_names) if player_names is not None else None
 
     def generate(
@@ -90,6 +94,42 @@ class RallyCommentaryService:
             segment_index=segment_index,
             court_position_to_player=court_position_to_player,
             config=config,
+        )
+
+    def analyze_tactics(
+        self,
+        *,
+        compact_facts: CompactRallyFacts,
+        max_facts: int = 5,
+    ) -> TacticalAnalysisResult:
+        """Analyze one compact rally with one dedicated provider call."""
+        if self._tactical_provider is None:
+            raise ValueError("tactical_provider is required for tactical analysis")
+        return analyze_tactical_facts(
+            provider=self._tactical_provider,
+            compact_facts=compact_facts,
+            max_facts=max_facts,
+        )
+
+    def analyze_tactics_from_stages(
+        self,
+        *,
+        stages: UpstreamStageData,
+        segment_index: int,
+        court_position_to_player: CourtPositionToPlayer | None,
+        compact_config: CompactFactConfig | None = None,
+        max_facts: int = 5,
+    ) -> TacticalAnalysisResult:
+        """Build compact facts, then make one tactical provider call."""
+        compact = self.prepare_compact_facts(
+            stages=stages,
+            segment_index=segment_index,
+            court_position_to_player=court_position_to_player,
+            config=compact_config,
+        )
+        return self.analyze_tactics(
+            compact_facts=compact,
+            max_facts=max_facts,
         )
 
     def generate_from_stages(

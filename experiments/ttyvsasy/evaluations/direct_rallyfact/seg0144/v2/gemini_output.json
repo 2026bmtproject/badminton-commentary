@@ -1,0 +1,373 @@
+{
+  "schema_version": "experimental-enriched-rally-fact-v2",
+  "segment_index": 144,
+  "game_index": null,
+  "start_sec": 5204.633,
+  "end_sec": 5221.833,
+  "duration_sec": 17.2,
+  "score": {
+    "a": 22,
+    "b": 21
+  },
+  "server": null,
+  "events": [
+    {
+      "event_index": 1280,
+      "frame": 156182,
+      "time_sec": 5206.066,
+      "player": "b",
+      "stroke_type": "殺球",
+      "stroke_confidence": 0.7753762006759644,
+      "pose_observation": {
+        "source_frame": 156182,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "forehand",
+        "limitations": ["No 3D pose, wrist depth ambiguous"]
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": ["court_detection and shuttle_tracking stages are missing from input"]
+    },
+    {
+      "event_index": 1281,
+      "frame": 156197,
+      "time_sec": 5206.566,
+      "player": "a",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.8470430374145508,
+      "pose_observation": {
+        "source_frame": 156197,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "forehand",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1282,
+      "frame": 156217,
+      "time_sec": 5207.233,
+      "player": "b",
+      "stroke_type": "平快球",
+      "stroke_confidence": 0.7534645795822144,
+      "pose_observation": {
+        "source_frame": 156217,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "forehand",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1283,
+      "frame": 156231,
+      "time_sec": 5207.7,
+      "player": "a",
+      "stroke_type": "切球",
+      "stroke_confidence": 0.662659764289856,
+      "pose_observation": {
+        "source_frame": 156231,
+        "frame_delta": 0,
+        "confidence": 0.7,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "forehand",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1284,
+      "frame": 156254,
+      "time_sec": 5208.466,
+      "player": "b",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.8966711759567261,
+      "pose_observation": {
+        "source_frame": 156254,
+        "frame_delta": 0,
+        "confidence": 0.5,
+        "hitting_arm_candidate": "unknown",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": ["Arm joints overlap, geometry ambiguous"]
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1285,
+      "frame": 156280,
+      "time_sec": 5209.333,
+      "player": "a",
+      "stroke_type": "高遠球",
+      "stroke_confidence": 0.5493684411048889,
+      "pose_observation": {
+        "source_frame": 156280,
+        "frame_delta": 0,
+        "confidence": 0.7,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1286,
+      "frame": 156327,
+      "time_sec": 5210.9,
+      "player": "b",
+      "stroke_type": "切球",
+      "stroke_confidence": 0.8482237458229065,
+      "pose_observation": {
+        "source_frame": 156327,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1287,
+      "frame": 156348,
+      "time_sec": 5211.6,
+      "player": "a",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.7843617796897888,
+      "pose_observation": {
+        "source_frame": 156348,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1288,
+      "frame": 156372,
+      "time_sec": 5212.4,
+      "player": "b",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.8795944452285767,
+      "pose_observation": {
+        "source_frame": 156372,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "unknown",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1289,
+      "frame": 156400,
+      "time_sec": 5213.333,
+      "player": "a",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.9059824347496033,
+      "pose_observation": {
+        "source_frame": 156400,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "unknown",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1290,
+      "frame": 156426,
+      "time_sec": 5214.2,
+      "player": "b",
+      "stroke_type": "高遠球",
+      "stroke_confidence": 0.8779430389404297,
+      "pose_observation": {
+        "source_frame": 156426,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1291,
+      "frame": 156464,
+      "time_sec": 5215.466,
+      "player": "a",
+      "stroke_type": "高遠球",
+      "stroke_confidence": 0.8991922736167908,
+      "pose_observation": {
+        "source_frame": 156464,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1292,
+      "frame": 156506,
+      "time_sec": 5216.866,
+      "player": "b",
+      "stroke_type": "切球",
+      "stroke_confidence": 0.5794906616210938,
+      "pose_observation": {
+        "source_frame": 156506,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "right",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1293,
+      "frame": 156525,
+      "time_sec": 5217.5,
+      "player": "a",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.42751583456993103,
+      "pose_observation": {
+        "source_frame": 156525,
+        "frame_delta": 0,
+        "confidence": 0.8,
+        "hitting_arm_candidate": "unknown",
+        "forehand_backhand_candidate": "unknown",
+        "limitations": []
+      },
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": []
+    },
+    {
+      "event_index": 1294,
+      "frame": 156550,
+      "time_sec": 5218.333,
+      "player": "b",
+      "stroke_type": "平快球",
+      "stroke_confidence": 0.4340746998786926,
+      "pose_observation": null,
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": ["Pose tracking data truncated before this frame"]
+    },
+    {
+      "event_index": 1295,
+      "frame": 156559,
+      "time_sec": 5218.633,
+      "player": "a",
+      "stroke_type": "小球",
+      "stroke_confidence": 0.5541622638702393,
+      "pose_observation": null,
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": ["Pose tracking data truncated before this frame"]
+    },
+    {
+      "event_index": 1296,
+      "frame": 156580,
+      "time_sec": 5219.333,
+      "player": "b",
+      "stroke_type": "撲球",
+      "stroke_confidence": 0.5463900566101074,
+      "pose_observation": null,
+      "court_observation": null,
+      "shuttle_observation": null,
+      "warnings": ["Pose tracking data truncated before this frame"]
+    }
+  ],
+  "rally_length": 17,
+  "highlight_score": null,
+  "tactical_candidates": [
+    {
+      "pattern_type": "notable_stroke_sequence",
+      "description": "連續三拍小球交換",
+      "confidence": 0.85,
+      "salience": 0.6,
+      "start_event_index": 1287,
+      "end_event_index": 1289,
+      "players": ["a", "b"],
+      "evidence": [
+        {
+          "stage": "stroke_classification",
+          "event_indexes": [1287, 1288, 1289],
+          "frames": [156348, 156372, 156400]
+        }
+      ],
+      "limitations": ["Depth zone not observed due to missing court detection data"]
+    },
+    {
+      "pattern_type": "notable_stroke_sequence",
+      "description": "雙方高遠球交換",
+      "confidence": 0.88,
+      "salience": 0.5,
+      "start_event_index": 1290,
+      "end_event_index": 1291,
+      "players": ["a", "b"],
+      "evidence": [
+        {
+          "stage": "stroke_classification",
+          "event_indexes": [1290, 1291],
+          "frames": [156426, 156464]
+        }
+      ],
+      "limitations": ["Depth zone not observed due to missing court detection data"]
+    },
+    {
+      "pattern_type": "attack_transition",
+      "description": "由平快球壓迫接續小球與撲球形成進攻壓力",
+      "confidence": 0.7,
+      "salience": 0.8,
+      "start_event_index": 1294,
+      "end_event_index": 1296,
+      "players": ["a", "b"],
+      "evidence": [
+        {
+          "stage": "stroke_classification",
+          "event_indexes": [1294, 1295, 1296],
+          "frames": [156550, 156559, 156580]
+        }
+      ],
+      "limitations": ["Pose and court data missing for these frames"]
+    }
+  ],
+  "warnings": ["court_detection and shuttle_tracking stages are entirely missing from input"]
+}

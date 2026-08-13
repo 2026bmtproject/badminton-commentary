@@ -1,0 +1,106 @@
+{
+  "audit_version": "report-implementation-audit-v1",
+  "checks": [
+    {
+      "check_id": "A001",
+      "claim": "The project is pinned to Python 3.12.",
+      "status": "VERIFIED",
+      "evidence": "pyproject.toml project.requires-python"
+    },
+    {
+      "check_id": "A002",
+      "claim": "RallyFact is the canonical single-rally domain input.",
+      "status": "VERIFIED",
+      "evidence": "badminton_commentary.schemas.RallyFact.model_fields"
+    },
+    {
+      "check_id": "A003",
+      "claim": "StagePaths exposes four core and three optional vision stages.",
+      "status": "VERIFIED",
+      "evidence": "badminton_commentary.adapters.StagePaths.model_fields"
+    },
+    {
+      "check_id": "A004",
+      "claim": "The service exposes parsed-stage, compact-fact, tactical, and generation boundaries.",
+      "status": "VERIFIED",
+      "evidence": "RallyCommentaryService public methods"
+    },
+    {
+      "check_id": "A005",
+      "claim": "The production batch output is a RallyCommentaryBundle.",
+      "status": "VERIFIED",
+      "evidence": "RallyCommentaryBundle.model_fields"
+    },
+    {
+      "check_id": "A006",
+      "claim": "Production CompactRallyFacts remains schema v1 and includes per-event facts.",
+      "status": "VERIFIED",
+      "evidence": "CompactRallyFacts.model_fields"
+    },
+    {
+      "check_id": "A007",
+      "claim": "Production CompactPoseFact still contains a hitting-arm geometry candidate.",
+      "status": "VERIFIED",
+      "evidence": "CompactPoseFact.model_fields"
+    },
+    {
+      "check_id": "A008",
+      "claim": "Experimental pose geometry has six numeric feature groups and no posture label.",
+      "status": "VERIFIED",
+      "evidence": "PoseGeometryFeatures.model_fields"
+    },
+    {
+      "check_id": "A009",
+      "claim": "Pose geometry uses confidence threshold 0.35 and fixed keyframe deltas.",
+      "status": "VERIFIED",
+      "evidence": "pose_geometry.MIN_KP_CONF and POSE_KEYFRAME_DELTAS"
+    },
+    {
+      "check_id": "A010",
+      "claim": "Synthetic step width is torso-normalized and confidence is clamped.",
+      "status": "VERIFIED",
+      "evidence": "compute_pose_geometry synthetic runtime result"
+    },
+    {
+      "check_id": "A011",
+      "claim": "The direct package transport version is v4 with a -8/+10 pose source window.",
+      "status": "VERIFIED",
+      "evidence": "package_direct_rallyfact.py literal constants"
+    },
+    {
+      "check_id": "A012",
+      "claim": "The direct v4 transport still requests Experimental Enriched RallyFact v3 output.",
+      "status": "VERIFIED",
+      "evidence": "package_direct_rallyfact.py OUTPUT_SCHEMA_VERSION"
+    },
+    {
+      "check_id": "A013",
+      "claim": "Tactical analysis returns at most five validated facts.",
+      "status": "VERIFIED",
+      "evidence": "TacticalAnalysisResult schema and TacticalAnalyzerConfig default"
+    },
+    {
+      "check_id": "A014",
+      "claim": "Gemini defaults use an environment-variable key and bounded retry settings.",
+      "status": "VERIFIED",
+      "evidence": "GeminiConfig defaults"
+    },
+    {
+      "check_id": "A015",
+      "claim": "The audit itself does not require provider or CV execution.",
+      "status": "VERIFIED",
+      "evidence": "inspect.signature(run_audit)"
+    },
+    {
+      "check_id": "A016",
+      "claim": "A generated direct v4 package matches the compact transport contract.",
+      "status": "VERIFIED",
+      "evidence": "outputs\\ttyvsasy\\direct_rallyfact\\seg0144_v4_prompt_test\\rally_stage_input.json"
+    }
+  ],
+  "summary": {
+    "VERIFIED": 16,
+    "FAILED": 0,
+    "NOT_CHECKED": 0
+  }
+}

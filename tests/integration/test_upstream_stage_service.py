@@ -14,6 +14,10 @@ from badminton_commentary.generation.rally_batch_commentator import (
     RallyBatchGenerationError,
 )
 from badminton_commentary.providers import FakeProvider
+from badminton_commentary.facts import (
+    GeneratedTacticalAnalysis,
+    GeneratedTacticalFact,
+)
 from badminton_commentary.schemas import (
     GeneratedCommentary,
     GeneratedRallyTextBatch,
@@ -127,3 +131,44 @@ def test_service_prepares_compact_facts_without_calling_provider():
     assert [item.event_index for item in compact.events] == [2, 3, 4]
     assert compact.schema_version == "compact-rally-facts-v1"
     assert provider.calls == []
+
+
+def test_service_analyzes_compact_facts_with_dedicated_provider():
+    stages = read_upstream_stages(StagePaths.from_stage_root(FIXTURE_ROOT))
+    mapping = CourtPositionToPlayer(top="b", bottom="a")
+    commentary_provider = FakeProvider(response="not used")
+    tactical_provider = FakeProvider(
+        response=GeneratedTacticalAnalysis(
+            segment_index=1,
+            facts=[
+                GeneratedTacticalFact(
+                    pattern_type="attack_transition",
+                    description="高遠球後接續一拍進攻球。",
+                    confidence=0.8,
+                    salience=0.8,
+                    start_event_index=2,
+                    end_event_index=3,
+                    players=["a", "b"],
+                    evidence_fact_ids=[
+                        "rally:1:stroke:2",
+                        "rally:1:stroke:3",
+                    ],
+                    limitations=["只根據已辨識球種推導"],
+                )
+            ],
+        ).model_dump_json()
+    )
+    service = RallyCommentaryService(
+        provider=commentary_provider,
+        tactical_provider=tactical_provider,
+    )
+
+    result = service.analyze_tactics_from_stages(
+        stages=stages,
+        segment_index=1,
+        court_position_to_player=mapping,
+    )
+
+    assert len(result.facts) == 1
+    assert len(tactical_provider.calls) == 1
+    assert commentary_provider.calls == []

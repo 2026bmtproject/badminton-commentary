@@ -6,3 +6,11 @@ provider:
     api_key_env: GEMINI_API_KEY
     timeout_seconds: 30.0
     max_attempts: 3
+
+# Tactical analysis uses one higher-reasoning model call per selected rally.
+# Keep this separate from the lower-latency commentary model above.
+tactical_analyzer:
+  model: gemini-3.1-pro-preview
+  fallback_models:
+    - gemini-3.6-flash
+  max_facts: 5

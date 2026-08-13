@@ -6,6 +6,13 @@ from .schemas import (
     CompactShuttlePathFact,
     CompactStrokeFact,
 )
+from .tactical import (
+    GeneratedTacticalAnalysis,
+    GeneratedTacticalFact,
+    TacticalAnalysisResult,
+    TacticalFact,
+    TacticalPatternType,
+)
 
 __all__ = [
     "CompactCourtPositionFact",
@@ -14,5 +21,10 @@ __all__ = [
     "CompactRallyFacts",
     "CompactShuttlePathFact",
     "CompactStrokeFact",
+    "GeneratedTacticalAnalysis",
+    "GeneratedTacticalFact",
+    "TacticalAnalysisResult",
+    "TacticalFact",
+    "TacticalPatternType",
     "build_compact_rally_facts",
 ]

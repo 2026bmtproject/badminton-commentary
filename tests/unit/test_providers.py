@@ -27,6 +27,28 @@ class StubClient:
         self.models = models
 
 
+class StatusError(RuntimeError):
+    def __init__(self, status_code, message, *, sdk_style=False):
+        super().__init__(message)
+        if sdk_style:
+            self.code = status_code
+        else:
+            self.status_code = status_code
+
+
+class ModelSequenceStub:
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        result = self.responses[kwargs["model"]]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
 def test_fake_provider_returns_configured_response_and_records_prompts():
     provider = FakeProvider(response='{"ok": true}')
 
@@ -136,6 +158,90 @@ def test_gemini_provider_can_be_created_from_config(monkeypatch):
     provider.generate(system_prompt="system", user_prompt="user")
 
     assert models.calls[0]["model"] == "configured-model"
+
+
+def test_gemini_provider_supports_role_specific_model_override(monkeypatch):
+    models = StubModels(response=SimpleNamespace(text="ok"))
+    config = GeminiConfig(model="commentary-model")
+    monkeypatch.setenv("GEMINI_API_KEY", "secret")
+
+    provider = GeminiProvider.from_config(
+        config,
+        model_override="tactical-model",
+        client=StubClient(models),
+    )
+    provider.generate(system_prompt="system", user_prompt="user")
+
+    assert models.calls[0]["model"] == "tactical-model"
+
+
+def test_gemini_provider_falls_back_after_temporary_model_unavailability():
+    models = ModelSequenceStub(
+        {
+            "pro-preview": StatusError(503, "high demand"),
+            "stable-flash": SimpleNamespace(text="fallback result"),
+        }
+    )
+    provider = GeminiProvider(
+        model="pro-preview",
+        fallback_models=["stable-flash"],
+        client=StubClient(models),
+    )
+
+    result = provider.generate(system_prompt="system", user_prompt="user")
+
+    assert result == "fallback result"
+    assert [call["model"] for call in models.calls] == [
+        "pro-preview",
+        "stable-flash",
+    ]
+    assert provider.last_model_used == "stable-flash"
+
+
+def test_gemini_provider_reads_google_genai_code_for_fallback():
+    models = ModelSequenceStub(
+        {
+            "pro-preview": StatusError(
+                504,
+                "deadline exceeded",
+                sdk_style=True,
+            ),
+            "stable-flash": SimpleNamespace(text="fallback result"),
+        }
+    )
+    provider = GeminiProvider(
+        model="pro-preview",
+        fallback_models=["stable-flash"],
+        client=StubClient(models),
+    )
+
+    assert provider.generate(system_prompt="system", user_prompt="user") == (
+        "fallback result"
+    )
+    assert [call["model"] for call in models.calls] == [
+        "pro-preview",
+        "stable-flash",
+    ]
+
+
+def test_gemini_provider_does_not_hide_spending_cap_or_rate_limit():
+    models = ModelSequenceStub(
+        {
+            "primary": StatusError(429, "spending cap"),
+            "fallback": SimpleNamespace(text="must not be called"),
+        }
+    )
+    provider = GeminiProvider(
+        model="primary",
+        fallback_models=["fallback"],
+        client=StubClient(models),
+    )
+
+    with pytest.raises(ProviderError, match="spending cap"):
+        provider.generate(system_prompt="system", user_prompt="user")
+
+    assert [call["model"] for call in models.calls] == ["primary"]
+    assert provider.last_model_used is None
 
 
 def test_gemini_provider_wraps_sdk_errors():

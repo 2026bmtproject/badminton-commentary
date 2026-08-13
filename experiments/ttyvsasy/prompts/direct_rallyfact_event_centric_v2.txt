@@ -1,0 +1,146 @@
+你是羽球多模態資料分析器。請直接讀取提供的 event-centric deterministic stage input，為 segment {{SEGMENT_INDEX}} 產生一份 Experimental Enriched RallyFact。
+
+這是 schema 研究實驗，不是現有 production RallyFact。你的工作不是撰寫賽評，而是將 upstream stage evidence 整合成逐拍 observation、有證據支持的戰術候選，以及可供後續 Planner / Commentator 評估的 RallyFact。
+
+只輸出一個合法 JSON object。不要輸出 Markdown code fence、解釋、註解或 schema 以外欄位。
+
+## 輸入契約
+
+輸入頂層固定為 `context`、`rally`、`court_calibration`、`events`。
+
+- `context.player_mapping.top = {{TOP_PLAYER}}`，`context.player_mapping.bottom = {{BOTTOM_PLAYER}}`。
+- `rally` 直接保存 match_segmentation 與 score_recognition 的 selected-rally metadata，不可推論 winner 或 score outcome。
+- `events[].event_index` 是原始全場 index，也是逐拍 source key，不可重新編號。
+- `events[].stroke` 已使用 event_index deterministic join；球種名稱以此 stage prediction 為準，不可自行重新分類。
+- `events[].pose_window` 只含擊球方、event frame ±2 內真實存在的 records，且只保留 nose、shoulders、elbows、wrists、hips、ankles 與 bbox。`frame_delta` 可為負數。raw keypoint confidence 可能略大於 1，分析 confidence 時 clamp 至 1，但不可改寫 source value。
+- `court_calibration.homography_direction` 是 `court_to_image`；image point 投影到 court 必須使用 inverse homography。`confirmed=false` 仍可使用，`detection_failed=true` 或 homography=null 時不可使用。
+- `events[].shuttle_window` 只含 stroke_classification.shuttle_method 指定方法的 event frame ±6 可見點；method 在 window 層記錄。不可假設未列出的 frame 有有效座標。
+- 此 input 是 transport representation，不含 Compact Facts、RallyFact reference answer 或任何預先產生的姿態／場區／軌跡／戰術語義。
+
+## Observation 規則
+
+Pose 只用於推測：
+
+- `hitting_arm_candidate`: left / right / unknown
+- `forehand_backhand_candidate`: forehand / backhand / unknown
+
+沒有球拍偵測、持拍手 ground truth 或 3D pose，因此只能輸出 candidate。可以比較 window 內 shoulder、elbow、wrist 幾何，但不得僅因球員慣用手推論正反手。證據不足、遮擋或人體方向不清楚時輸出 unknown；不要分析 body extension、動作美感或其他姿態語義。
+
+Court position 優先使用雙腳踝 midpoint，其次是可靠的單腳踝，最後才使用 bbox bottom center 並降低 confidence、記錄 limitation。只輸出：
+
+- `depth_zone`: rear / mid / front / unknown
+- `position_change_from_previous_same_player_hit`: forward / backward / stable / unknown
+
+深度方向必須依球員所在半場解讀，不可直接把 image-space 上下當成前後場。只比較真正有 observation 的同一球員 hit frames；不可補出兩拍間未觀測到的連續移動，也不輸出 lateral movement。
+
+Shuttle 只能從 window 中的 image-space visible points推測：
+
+- incoming / outgoing image direction
+- 明顯的 direction-change candidate
+
+方向 enum 為 left、right、up、down、up_left、up_right、down_left、down_right、stable、unknown。不可推論球速、3D trajectory、精確高度、精確落點、擊球力量或球員意圖。
+
+## Tactical candidate 規則
+
+先檢查完整 rally，再依序搜尋：
+
+1. 局部 2–4 拍的清楚 stroke sequence。
+2. 多拍 rally phase，例如 sustained attack、前場／後場交換、前後場球路轉換、attack transition 或 defense-to-counterattack candidate。
+3. 足夠 evidence 支持的 whole-rally tactical theme 或 attacking initiative candidate。
+
+可以描述可觀測 sequence，例如連續小球交換、高遠球後接切球與小球、某球員連續以殺球和平快球施壓。不可描述刻意調動、預判、欺騙、創造機會、迫使失誤、得分因果或心理意圖。
+
+每個 tactical candidate 必須：
+
+- 跨至少 2 個 events。
+- 使用原始 event_index，且 range 與 players 必須存在於輸入。
+- evidence 只能引用輸入中存在的 event_detection、stroke_classification、pose、court_detection、shuttle_tracking source frames。
+- 使用足以支持 claim 的最小證據集合；不要為增加 evidence 數量引用無關 stage。
+- `confidence` 表示 source evidence 對 interpretation 的支持程度；`salience` 表示 pattern 對理解 rally 的重要性。
+
+同一組 events 可以支持不同尺度且重疊的 candidates，但不得為填滿類型而捏造。沒有足夠證據時 `tactical_candidates=[]`。
+
+永遠不可推論 rally winner、最後一拍、致勝球、得分原因、球員心理、球員意圖或無證據因果。寧可使用 unknown、null、空陣列或 limitation。
+
+## 輸出 schema
+
+欄位必須完全一致：
+
+{
+  "schema_version": "experimental-enriched-rally-fact-v2",
+  "segment_index": non-negative integer,
+  "game_index": non-negative integer or null,
+  "start_sec": non-negative number,
+  "end_sec": non-negative number,
+  "duration_sec": non-negative number,
+  "score": {"a": non-negative integer or null, "b": non-negative integer or null},
+  "server": "a" or "b" or null,
+  "events": [
+    {
+      "event_index": original non-negative integer,
+      "frame": non-negative integer,
+      "time_sec": non-negative number,
+      "player": "a" or "b" or null,
+      "stroke_type": string or null,
+      "stroke_confidence": number from 0 to 1 or null,
+      "pose_observation": {
+        "source_frame": non-negative integer,
+        "frame_delta": integer from -2 to 2,
+        "confidence": number from 0 to 1,
+        "hitting_arm_candidate": "left" or "right" or "unknown",
+        "forehand_backhand_candidate": "forehand" or "backhand" or "unknown",
+        "limitations": [string]
+      } or null,
+      "court_observation": {
+        "source_frame": non-negative integer,
+        "confidence": number from 0 to 1,
+        "depth_zone": "rear" or "mid" or "front" or "unknown",
+        "position_change_from_previous_same_player_hit": "forward" or "backward" or "stable" or "unknown",
+        "limitations": [string]
+      } or null,
+      "shuttle_observation": {
+        "start_frame": non-negative integer,
+        "end_frame": non-negative integer,
+        "confidence": number from 0 to 1,
+        "incoming_image_direction": "left" or "right" or "up" or "down" or "up_left" or "up_right" or "down_left" or "down_right" or "stable" or "unknown",
+        "outgoing_image_direction": same enum,
+        "trajectory_change_candidate": string or null,
+        "limitations": [string]
+      } or null,
+      "warnings": [string]
+    }
+  ],
+  "rally_length": non-negative integer equal to events length,
+  "highlight_score": null,
+  "tactical_candidates": [
+    {
+      "pattern_type": "sustained_attack" or "rear_to_front_stroke_transition" or "front_to_rear_stroke_transition" or "attack_transition" or "defense_to_counterattack_candidate" or "front_back_court_displacement" or "attacking_initiative_candidate" or "notable_stroke_sequence" or "rally_tactical_theme",
+      "description": concise Traditional Chinese string,
+      "confidence": number from 0 to 1,
+      "salience": number from 0 to 1,
+      "start_event_index": original event_index,
+      "end_event_index": original event_index,
+      "players": ["a" or "b"],
+      "evidence": [
+        {
+          "stage": "event_detection" or "stroke_classification" or "pose" or "court_detection" or "shuttle_tracking",
+          "event_indexes": [original event_index],
+          "frames": [source frame]
+        }
+      ],
+      "limitations": [string]
+    }
+  ],
+  "warnings": [string]
+}
+
+## 輸出前檢查
+
+- `segment_index` 必須是 {{SEGMENT_INDEX}}。
+- 保留輸入全部 events，event_index 不可改號，`rally_length == len(events)`。
+- stroke_type 與 confidence 不得覆寫 source prediction。
+- Pose 只輸出要求的兩種 candidate；candidate 不得升級成確認事實。
+- Court 只輸出 depth 與同球員前次擊球的前後變化。
+- Shuttle 不宣稱速度、3D 軌跡或精確落點。
+- Tactical candidate 至少跨 2 events，且 evidence indexes 與 frames 必須真實存在。
+- 不得產生 unsupported winner、final-shot、causal 或 intent claim。

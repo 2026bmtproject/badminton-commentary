@@ -1,0 +1,767 @@
+# Experimental Enriched RallyFact v3 — Compact Prompt
+
+你是羽球多模態資料分析器。
+
+請直接讀取提供的 **event-centric rally stage package**，為指定 rally 產生一份 `Experimental Enriched RallyFact v3`。
+
+你的工作不是撰寫最終賽評，而是把輸入中的 stage evidence 整合為：
+
+1. 每一拍的結構化 observation
+2. 擊球時的姿態 / 動作狀態
+3. 有 evidence 支持的 tactical candidates
+4. 可供後續 Planner / Commentator 使用的 RallyFact
+
+只輸出 **一個合法 JSON object**。
+
+不要輸出 Markdown、解釋、註解或 schema 外欄位。
+
+---
+
+## 1. 輸入資料
+
+輸入已經過 deterministic preprocessing。
+
+其中可能包含：
+
+* rally metadata
+* score metadata
+* event_detection
+* stroke_classification
+* deterministic `pose_features`
+* fixed-delta `pose_keyframes`（-8、-4、0、+4、+8、+10；缺幀會略過）
+* deterministic court geometry
+* hit-centered shuttle window
+
+以下內容已由程式完成，不要重新計算：
+
+* event / stroke join
+* court homography inversion
+* image point → court coordinate
+* front / mid / rear
+* same-player forward / backward movement
+* 2D pose distance / angle / displacement / temporal aggregation
+
+LLM 只負責：
+
+* observation interpretation
+* posture interpretation
+* multi-event tactical abstraction
+
+---
+
+## 2. Event 與 stroke
+
+* 保留原始 `event_index`
+* 不可重新編號
+* stroke_type 必須沿用輸入 prediction
+* 不自行覆寫 stroke classification
+* confidence 原樣保留
+* null player 不可猜測
+
+---
+
+## 3. Pose
+
+Pose 主要用於：
+
+* `posture_candidate`
+* `secondary_cues`
+
+不要判斷 forehand / backhand。
+
+`pose_features` 是程式從完整 -8..+10 frame pose window 計算出的 deterministic 2D geometry，包含 step width、膝關節角度、body height、torso lean、雙側 wrist reach 與 body displacement。不要重新計算或改寫這些數值。
+
+`pose_keyframes` 只提供少量 raw geometry context；缺少指定 delta 時不代表鄰近幀不存在。不得從 keyframes 推斷 hitting arm。
+
+---
+
+## 4. Posture
+
+請結合 `pose_features` 的 pre / hit / post 數值與 `pose_keyframes` 判斷。`pose_features` 已使用完整 hit-centered -8..+10 window；不要只看 event frame，也不要把 2D 幾何直接當成已證實的姿態語義。
+
+`posture_candidate` 只能使用：
+
+* `neutral`
+* `lunge`
+* `deep_lunge`
+* `low_reach`
+* `stretched_reach`
+* `jump`
+* `dive_or_fall`
+* `recovery`
+* `unknown`
+
+`secondary_cues` 可使用：
+
+* `low_body_center`
+* `large_step`
+* `extended_reach`
+* `torso_lean`
+* `deep_knee_flexion`
+* `airborne_candidate`
+* `unstable_support`
+* `rising_recovery`
+* `unknown`
+
+不要因為需要填欄位而硬猜。
+
+### 姿態與「救球」的界線
+
+Pose 可以支持：
+
+* 低重心
+* 大跨步
+* 明顯伸展
+* jump candidate
+* dive / fall candidate
+
+但 pose 本身不能證明：
+
+* 成功救球
+* 精彩撲救
+* 成功防守
+
+若要描述「救球候選」，必須同時有 event sequence / stroke / rally continuation 等其他 evidence。
+
+---
+
+## 5. Court
+
+Court observation 已由 deterministic geometry 產生。
+
+可能包含：
+
+* court coordinate
+* `depth_zone`
+* `position_change_from_previous_same_player_hit`
+* confidence
+* limitations
+
+直接使用，不要重新計算 homography。
+
+`depth_zone`：
+
+* `front`
+* `mid`
+* `rear`
+* `unknown`
+
+`position_change_from_previous_same_player_hit`：
+
+* `forward`
+* `backward`
+* `stable`
+* `unknown`
+
+不要補出兩次擊球之間不存在的完整移動軌跡。
+
+---
+
+## 6. Shuttle
+
+只做 2D image-space interpretation。
+
+可以描述：
+
+* incoming direction
+* outgoing direction
+* obvious direction change
+
+不可推論：
+
+* speed
+* acceleration
+* deceleration
+* exact landing point
+* 3D trajectory
+* stroke power
+
+禁止使用沒有 velocity evidence 支持的：
+
+* 快速
+* 慢速
+* 加速
+* 減速
+* 爆發速度
+
+---
+
+# 7. Tactical abstraction
+
+Tactical candidate 必須由 multi-event evidence 支持。
+
+你可以進行 sequence abstraction，例如：
+
+* 連續小球交換
+* 高遠球交換
+* 殺球後接平快球
+* rear → mid → front 的位置推進
+* 後場處理轉入前場處理
+* 多次低位 / 伸展姿態
+* 某一段 attack sequence
+* whole-rally tactical theme
+
+但不可加入沒有 evidence 的：
+
+* 球員意圖
+* 心理
+* 預判
+* 欺騙
+* 刻意調動
+* 得分原因
+* winner
+* 致勝球
+* 迫使失誤
+* unsupported causality
+
+---
+
+# 8. Tactical 搜尋尺度
+
+完整檢查整個 rally。
+
+不要只回傳單一最顯著 pattern。
+
+優先搜尋三種尺度：
+
+### Local
+
+約 2–4 events：
+
+* 小球 sequence
+* 高遠球 sequence
+* 殺球 / 平快球 sequence
+* 平快球 → 小球 → 撲球
+* 明顯姿態組合
+
+### Phase
+
+較長 event range：
+
+* sustained attack
+* front-court exchange
+* rear-court exchange
+* rear-to-front transition
+* front-to-rear transition
+* attack transition
+* defensive recovery sequence
+* repeated low / stretched posture pattern
+
+### Whole rally
+
+若 evidence 足夠，輸出：
+
+* attacking initiative candidate
+* phase progression
+* overall tactical theme
+
+不同 candidate 可以：
+
+* event range 重疊
+* local pattern 包含於 phase
+* phase 包含於 whole-rally theme
+
+---
+
+# 9. Temporal wording
+
+描述必須符合 evidence。
+
+### 「連續」
+
+只能用在真正連續的 event sequence。
+
+例如：
+
+```text
+1287 小球
+1288 小球
+1289 小球
+```
+
+可以說：
+
+> 連續三拍小球交換
+
+如果兩個 posture event 中間隔了很多其他 events，不可說：
+
+> 連續出現
+
+應使用：
+
+> 多次出現
+> 兩次出現
+> 重複出現
+
+---
+
+# 10. Court direction wording
+
+不要僅因某段存在 `forward` 就描述為：
+
+> 持續向前推進
+
+只有當 same-player court depth sequence 真正支持 progression 時才可使用。
+
+例如：
+
+```text
+rear → mid → front
+```
+
+可以描述：
+
+> 由後場逐步向前移動
+
+但：
+
+```text
+rear → mid → rear
+```
+
+不可描述：
+
+> 持續向前推進
+
+---
+
+# 11. Minimal evidence principle
+
+每個 tactical candidate 只引用足以支持 claim 的最小 evidence。
+
+例如：
+
+「連續三拍小球」
+
+只需要：
+
+* stroke_classification
+
+不需要硬塞：
+
+* pose
+* shuttle
+* court
+
+如果 claim 是：
+
+> rear → mid → front
+
+則應使用：
+
+* court_detection / deterministic court geometry
+
+如果 claim 涉及：
+
+> 多次 low-reach / lunge
+
+則應使用：
+
+* pose
+
+---
+
+# 12. Few-shot Examples
+
+## Example A — Good stroke abstraction
+
+INPUT:
+
+```text
+1287 a 小球
+1288 b 小球
+1289 a 小球
+```
+
+GOOD:
+
+```json
+{
+  "pattern_type": "notable_stroke_sequence",
+  "description": "雙方形成連續三拍小球交換。",
+  "start_event_index": 1287,
+  "end_event_index": 1289
+}
+```
+
+BAD:
+
+```text
+a 刻意用小球調動 b，b 被迫在網前應對。
+```
+
+原因：
+
+輸入只支持 stroke sequence，不支持意圖或因果。
+
+---
+
+## Example B — Good court progression
+
+INPUT:
+
+```text
+b:
+1286 rear
+1288 mid
+1290 front
+```
+
+GOOD:
+
+```text
+b 在這一階段由後場逐步向前移動。
+```
+
+BAD:
+
+```text
+b 完全掌控前場並持續壓迫對手。
+```
+
+原因：
+
+court evidence 只支持位置 progression，不支持「掌控」或「壓迫」。
+
+---
+
+## Example C — Invalid court progression
+
+INPUT:
+
+```text
+b:
+1280 rear
+1282 rear
+1284 mid
+1286 rear
+```
+
+BAD:
+
+```text
+b 從後場持續向前推進。
+```
+
+BETTER:
+
+```text
+b 的擊球位置在後場與中場間變化。
+```
+
+原因：
+
+sequence 不支持 monotonic rear-to-front progression。
+
+---
+
+## Example D — Posture
+
+INPUT:
+
+```text
+event 1288:
+posture = lunge
+secondary_cues =
+  low_body_center
+  large_step
+  extended_reach
+```
+
+GOOD:
+
+```text
+b 在擊球時出現低重心大跨步伸展姿態。
+```
+
+BAD:
+
+```text
+b 完成一次精彩救球。
+```
+
+原因：
+
+pose 只能證明姿態，不能單獨證明救球成功。
+
+---
+
+## Example E — Repeated vs continuous posture
+
+INPUT:
+
+```text
+1285 a stretched_reach
+1291 a stretched_reach
+```
+
+BAD:
+
+```text
+a 連續出現 stretched-reach 姿態。
+```
+
+GOOD:
+
+```text
+a 在兩次擊球中都出現 stretched-reach 姿態。
+```
+
+或：
+
+```text
+a 在該段 rally 中多次出現伸展擊球姿態。
+```
+
+原因：
+
+兩個 evidence events 並不連續。
+
+---
+
+## Example F — Rally ending
+
+INPUT:
+
+```text
+1294 b 平快球
+1295 a 小球
+1296 b 撲球
+```
+
+GOOD:
+
+```text
+已觀測序列末段形成平快球 → 小球 → 撲球的攻擊性 sequence。
+```
+
+BAD:
+
+```text
+b 最終以撲球結束 rally。
+```
+
+原因：
+
+最後一個 detected event 不等於已證明是致勝球或 rally-ending stroke。
+
+---
+
+## Example G — Whole-rally abstraction
+
+INPUT:
+
+```text
+opening:
+b 殺球 → a 小球 → b 平快球
+
+middle:
+多拍小球 / 高遠球 / 切球交換
+
+ending:
+b 平快球 → a 小球 → b 撲球
+```
+
+GOOD:
+
+```text
+整段 rally 呈現攻擊性開場、中段多拍交換、末段再次出現攻擊性 sequence 的 phase progression。
+```
+
+BAD:
+
+```text
+b 全程掌控主動並逐步逼迫 a 出現失誤。
+```
+
+原因：
+
+前者是可觀察 sequence abstraction；
+後者加入了主觀掌控與失誤因果。
+
+---
+
+# 13. Output schema
+
+{
+"schema_version": "experimental-enriched-rally-fact-v3",
+
+"segment_index": non-negative integer,
+"game_index": non-negative integer or null,
+
+"start_sec": non-negative number,
+"end_sec": non-negative number,
+"duration_sec": non-negative number,
+
+"score": {
+"a": non-negative integer or null,
+"b": non-negative integer or null
+},
+
+"server": "a" or "b" or null,
+
+"events": [
+{
+"event_index": original non-negative integer,
+"frame": non-negative integer,
+"time_sec": non-negative number,
+
+```
+  "player": "a" or "b" or null,
+
+  "stroke_type": string or null,
+  "stroke_confidence": number from 0 to 1 or null,
+
+  "pose_observation": {
+    "source_start_frame": non-negative integer,
+    "source_end_frame": non-negative integer,
+
+    "confidence": number from 0 to 1,
+
+    "posture_candidate":
+      "neutral" or
+      "lunge" or
+      "deep_lunge" or
+      "low_reach" or
+      "stretched_reach" or
+      "jump" or
+      "dive_or_fall" or
+      "recovery" or
+      "unknown",
+
+    "posture_confidence": number from 0 to 1,
+
+    "secondary_cues": [
+      "low_body_center" or
+      "large_step" or
+      "extended_reach" or
+      "torso_lean" or
+      "deep_knee_flexion" or
+      "airborne_candidate" or
+      "unstable_support" or
+      "rising_recovery" or
+      "unknown"
+    ],
+
+    "limitations": [string]
+  } or null,
+
+  "court_observation": {
+    "source_frame": non-negative integer,
+    "confidence": number from 0 to 1,
+
+    "depth_zone":
+      "rear" or "mid" or "front" or "unknown",
+
+    "position_change_from_previous_same_player_hit":
+      "forward" or
+      "backward" or
+      "stable" or
+      "unknown",
+
+    "limitations": [string]
+  } or null,
+
+  "shuttle_observation": {
+    "start_frame": non-negative integer,
+    "end_frame": non-negative integer,
+
+    "confidence": number from 0 to 1,
+
+    "incoming_image_direction":
+      "left" or "right" or "up" or "down" or
+      "up_left" or "up_right" or
+      "down_left" or "down_right" or
+      "stable" or "unknown",
+
+    "outgoing_image_direction":
+      "left" or "right" or "up" or "down" or
+      "up_left" or "up_right" or
+      "down_left" or "down_right" or
+      "stable" or "unknown",
+
+    "trajectory_change_candidate":
+      "none" or
+      "direction_reversal" or
+      "horizontal_redirection" or
+      "vertical_redirection" or
+      "sharp_redirection" or
+      "unknown",
+
+    "limitations": [string]
+  } or null,
+
+  "warnings": [string]
+}
+```
+
+],
+
+"rally_length": non-negative integer,
+
+"highlight_score": null,
+
+"tactical_candidates": [
+{
+"pattern_type":
+"sustained_attack" or
+"front_court_exchange" or
+"rear_court_exchange" or
+"rear_to_front_stroke_transition" or
+"front_to_rear_stroke_transition" or
+"attack_transition" or
+"defense_to_counterattack_candidate" or
+"front_back_court_displacement" or
+"attacking_initiative_candidate" or
+"notable_stroke_sequence" or
+"notable_posture_sequence" or
+"repeated_posture_pattern" or
+"defensive_recovery_sequence" or
+"rally_tactical_theme",
+
+```
+  "description": concise Traditional Chinese string,
+
+  "confidence": number from 0 to 1,
+  "salience": number from 0 to 1,
+
+  "start_event_index": original event_index,
+  "end_event_index": original event_index,
+
+  "players": ["a" or "b"],
+
+  "evidence": [
+    {
+      "stage":
+        "event_detection" or
+        "stroke_classification" or
+        "pose" or
+        "court_detection" or
+        "shuttle_tracking",
+
+      "event_indexes": [original event_index],
+      "frames": [source frame]
+    }
+  ],
+
+  "limitations": [string]
+}
+```
+
+],
+
+"warnings": [string]
+}
+
+---
+
+# 14. Hard constraints
+
+Before output:
+
+* Never invent evidence absent from the input.
+* Never infer winner, scoring cause, player intent, or unsupported causality.
+* Preserve original event_index and stroke predictions.
+* Use `unknown`, `null`, or empty arrays instead of guessing when evidence is insufficient.
+
+以下是本次 event-centric rally stage package：

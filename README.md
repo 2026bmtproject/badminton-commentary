@@ -38,14 +38,17 @@ RallyCommentaryBundle JSON
         ↓
 frontend / Badminton Analysis System adapter
 
-Future Milestone 3:
+Current Milestone 3:
 CompactRallyFacts → Gemini Tactical Analyzer → TacticalFact[]
-→ Planner → Gemini Commentator → RallyCommentaryBundle
+
+Next milestone:
+TacticalFact[] → Planner → Gemini Commentator → RallyCommentaryBundle
 ```
 
 `RallyFact` 是 badminton-commentary 內部的 canonical domain representation，不是要求
 Badminton Analysis System 預先建立的外部資料格式。`CompactRallyFacts` 則是 selected
-segment 的 verified multimodal representation；目前已建立但尚未送入 Gemini prompt。
+segment 的 verified multimodal representation；目前可送入獨立的 Gemini Tactical
+Analyzer，但 TacticalFact 尚未接入 production Planner／Commentator。
 
 正式使用情境是一位使用者選取一個已分析完成的 rally。使用者的選擇本身就是啟動條件；
 該 rally 中所有具有球種與 confidence 的 strokes（包含普通發球與低 confidence 結果）
@@ -69,7 +72,11 @@ stages = read_upstream_stages(
     StagePaths.from_stage_root(match_path / "stages"),
     segment_index=37,
 )
-service = RallyCommentaryService(provider=provider, player_names=player_names)
+service = RallyCommentaryService(
+    provider=commentary_provider,
+    tactical_provider=tactical_provider,
+    player_names=player_names,
+)
 
 bundle = service.generate_from_stages(
     stages=stages,
@@ -100,10 +107,13 @@ compact_facts = service.prepare_compact_facts(
     segment_index=37,
     court_position_to_player=position_mapping,
 )
+
+tactical_facts = service.analyze_tactics(compact_facts=compact_facts)
 ```
 
 Compact schema、演算法與品質 gate 詳見
-[docs/compact-facts.md](docs/compact-facts.md)。
+[docs/compact-facts.md](docs/compact-facts.md)；TacticalFact schema、prompt boundary 與
+provenance gates 詳見 [docs/tactical-analyzer.md](docs/tactical-analyzer.md)。
 
 既有較低階 API 保留：
 
@@ -212,8 +222,10 @@ user-selected rally planner，依可用的 score、拍數、pattern 與 highligh
 
 ## Grounding guarantees
 
-- Fact Builder、Analyzers、Planners 與 Validators 都是 deterministic Python。
-- LLM 不負責建立比分、球種、擊球者、順序、時間或 tactical relation。
+- Fact Builder、stroke/rally Analyzers、Planners 與 Validators 是 deterministic Python；
+  Gemini Tactical Analyzer 由 LLM 提出 candidate，再由 deterministic gates 驗證。
+- LLM 不負責建立比分、球種、擊球者、順序、時間或其他觀測 facts；Tactical Analyzer
+  只提出可追溯的戰術候選，程式會驗證 evidence、event range 與 pattern-specific evidence。
 - Local sequence 必須由相鄰 `event_index` 支持。
 - 所有具有球種與 confidence 的 strokes 都進入 ordered context，包含普通發球。
 - 具有 player mapping 的每個 stroke 都有對應 event；缺少 mapping 時不得猜測擊球者。
@@ -249,16 +261,18 @@ Copy-Item .\config.yaml.example .\config.yaml
 ```
 
 API key 必須放在環境變數，不可寫入 repository。`config.yaml` 只記錄環境變數名稱、
-model、timeout 與 retry 設定。
+model、timeout 與 retry 設定。Commentator 與 Tactical Analyzer 可使用不同模型；範例預設
+分別為 `gemini-flash-latest` 與 `gemini-3.1-pro-preview`。若 Pro Preview 暫時回傳容量或
+服務錯誤，Tactical Analyzer 會自動降級至 stable `gemini-3.6-flash`，並在輸出記錄實際模型。
 
 ## Repository structure
 
 ```text
 badminton-commentary/
 ├── src/badminton_commentary/
-│   ├── analysis/           # deterministic facts and patterns
+│   ├── analysis/           # deterministic patterns + validated tactical analyzer
 │   ├── adapters/           # main-system stage schemas/readers/normalization
-│   ├── facts/              # compact multimodal schemas and feature builder
+│   ├── facts/              # compact multimodal and tactical schemas
 │   ├── generation/         # planners, batch generator, validators
 │   ├── providers/          # replaceable LLM providers
 │   ├── services/           # production public orchestration boundary
@@ -309,6 +323,11 @@ ASS 與 FFmpeg 只用於 demo、evaluation、展示影片；`RallyCommentaryServ
 新的整合應使用 `RallyCommentaryService`。
 
 ## Development
+
+目前架構、演算法、Git 演進與 implementation audit 見
+[docs/reports/algorithm_development_report.md](docs/reports/algorithm_development_report.md)；
+逐項驗證矩陣見
+[docs/reports/implementation_verification_report.md](docs/reports/implementation_verification_report.md)。
 
 ```powershell
 uv sync

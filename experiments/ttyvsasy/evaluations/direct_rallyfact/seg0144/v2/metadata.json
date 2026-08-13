@@ -1,0 +1,41 @@
+{
+  "experiment": "direct-all-stages-to-enriched-rallyfact",
+  "run_version": "v2",
+  "segment_index": 144,
+  "output_schema_version": "experimental-enriched-rally-fact-v2",
+  "court_position_to_player": {
+    "top": "b",
+    "bottom": "a"
+  },
+  "model": null,
+  "recorded_date": "2026-08-10",
+  "artifacts": {
+    "prompt": {
+      "path": "prompt.txt",
+      "sha256": "4421e3761030610bdaa24d1e1ea9336a06b55a824c0d61a1f00827f1489aad27"
+    },
+    "output": {
+      "path": "gemini_output.json",
+      "sha256": "a6f604f4d7e816850937f524de14e4eb44bcd8f6192ff536f3f2138413d576c8"
+    }
+  },
+  "validation": {
+    "valid_json": true,
+    "segment_index": 144,
+    "event_count": 17,
+    "rally_length": 17,
+    "tactical_candidate_count": 3
+  },
+  "assessment": {
+    "recorded_date": "2026-08-11",
+    "single_view_2d_pose_supports_reliable_forehand_backhand": false,
+    "reason": "The current 2D skeleton lacks racket orientation, grip, contact-side and 3D body-rotation evidence.",
+    "downstream_policy": "Treat forehand_backhand_candidate as unsupported research output; keep it unknown/null or exclude it from grounded Planner and Commentator facts."
+  },
+  "notes": [
+    "The repository record contains the prompt and provider output, not the full stage input payload.",
+    "The output reports court_detection and shuttle_tracking as missing.",
+    "The output reports pose data as truncated before events 1294 through 1296.",
+    "Model name and provider timing were not supplied with the artifacts."
+  ]
+}
