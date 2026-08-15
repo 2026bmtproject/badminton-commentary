@@ -293,4 +293,4 @@ outputs/ttyvsasy/forehand_backhand/
 └── seg0144_confidence_gate/
 ```
 
-目前表中只有 classifier distribution，尚未加入新一輪人工 verdict。完成各目錄的 `frame_review.html` 並匯出 JSON 後，需用 `analyze_forehand_backhand_review.py` 計算 per-rally 與 aggregate metrics，再決定 0.50／3-frame gate 是否值得保留。
+SEG140、141、143 的新一輪人工審核已完成；SEG144 上傳檔仍是修改前的 v1 baseline，不能納入 confidence-gated 統計。完整結果、統計語意與 orientation flip 診斷記錄於 [forehand_backhand_confidence_gate_review.md](forehand_backhand_confidence_gate_review.md)。

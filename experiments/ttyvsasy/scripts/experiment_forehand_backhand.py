@@ -77,6 +77,11 @@ Point = tuple[float, float]
 Side = Literal["forehand", "backhand"]
 Player = Literal["a", "b"]
 CourtPosition = Literal["top", "bottom"]
+OrientationPolicy = Literal[
+    "vote",
+    "court_prior",
+    "invert_disagreement",
+]
 
 
 class ExperimentModel(BaseModel):
@@ -146,6 +151,7 @@ class Config:
     w_face: float = 0.35
     w_prior: float = 0.25
     flip_full: float = 0.80
+    orientation_policy: OrientationPolicy = "vote"
 
     def __post_init__(self) -> None:
         if not 0 <= self.min_score <= 1:
@@ -162,6 +168,12 @@ class Config:
             raise ValueError("scale parameters must be positive")
         if self.min_margin < 0:
             raise ValueError("min_margin must be non-negative")
+        if self.orientation_policy not in {
+            "vote",
+            "court_prior",
+            "invert_disagreement",
+        }:
+            raise ValueError("unsupported orientation_policy")
 
 
 @dataclass(frozen=True)
@@ -508,9 +520,19 @@ def classify_hit(
         item.flip_vote * item.time_weight * item.torso_confidence
         for item in samples
     ) / max(flip_weight, 1e-6)
-    orientation_sign = 1.0 if flip_total >= 0 else -1.0
+    voted_orientation_sign = 1.0 if flip_total >= 0 else -1.0
     flip_confidence = min(1.0, abs(flip_total) / config.flip_full)
     expected_sign = -1.0 if court_position == "top" else 1.0
+    vote_disagreed_with_court_prior = voted_orientation_sign != expected_sign
+    if config.orientation_policy == "court_prior":
+        orientation_sign = expected_sign
+    elif (
+        config.orientation_policy == "invert_disagreement"
+        and vote_disagreed_with_court_prior
+    ):
+        orientation_sign = -voted_orientation_sign
+    else:
+        orientation_sign = voted_orientation_sign
     scored = [
         (
             item,
@@ -562,6 +584,11 @@ def classify_hit(
         ),
         "facing": "away" if orientation_sign > 0 else "toward",
         "body_flipped_from_court_prior": orientation_sign != expected_sign,
+        "orientation_policy": config.orientation_policy,
+        "voted_facing": (
+            "away" if voted_orientation_sign > 0 else "toward"
+        ),
+        "vote_disagreed_with_court_prior": vote_disagreed_with_court_prior,
         "flip_confidence": round(flip_confidence, 3),
         "flip_total": round(flip_total, 3),
         "flip_cues": {
@@ -1083,6 +1110,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=Config.min_racket_frames,
     )
     parser.add_argument("--min-margin", type=float, default=Config.min_margin)
+    parser.add_argument("--face-weight", type=float, default=Config.w_face)
+    parser.add_argument(
+        "--orientation-policy",
+        choices=("vote", "court_prior", "invert_disagreement"),
+        default=Config.orientation_policy,
+    )
     parser.add_argument("--skip-video", action="store_true")
     return parser.parse_args(argv)
 
@@ -1096,6 +1129,8 @@ def main(argv: list[str] | None = None) -> None:
         window=args.window,
         max_search=args.max_search,
         min_margin=args.min_margin,
+        w_face=args.face_weight,
+        orientation_policy=args.orientation_policy,
     )
     result, pose_lookup = analyze_segment(
         stage_root=args.stage_root,

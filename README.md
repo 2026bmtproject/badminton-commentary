@@ -327,7 +327,11 @@ ASS 與 FFmpeg 只用於 demo、evaluation、展示影片；`RallyCommentaryServ
 目前架構、演算法、Git 演進與 implementation audit 見
 [docs/reports/algorithm_development_report.md](docs/reports/algorithm_development_report.md)；
 逐項驗證矩陣見
-[docs/reports/implementation_verification_report.md](docs/reports/implementation_verification_report.md)。
+[docs/reports/implementation_verification_report.md](docs/reports/implementation_verification_report.md)；
+2D pose 正反手 confidence-gate 的人工審核與失敗分析見
+[docs/reports/forehand_backhand_confidence_gate_review.md](docs/reports/forehand_backhand_confidence_gate_review.md)；
+orientation A/B/C/D 比較見
+[docs/reports/forehand_backhand_orientation_ablation.md](docs/reports/forehand_backhand_orientation_ablation.md)。
 
 ```powershell
 uv sync

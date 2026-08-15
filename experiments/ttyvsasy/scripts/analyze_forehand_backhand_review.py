@@ -29,6 +29,7 @@ DEFAULT_OUTPUT = DEFAULT_RESULT.parent
 
 Side = Literal["forehand", "backhand"]
 Verdict = Literal["correct", "incorrect", "uncertain", "unreviewed"]
+ReviewStatus = Literal["labeled", "uncertain", "unreviewed"]
 
 
 class ReviewModel(BaseModel):
@@ -44,12 +45,15 @@ class ReviewEntry(ReviewModel):
     side_zh: str
     margin: float = Field(ge=0)
     verdict: Verdict
+    reference_side: Side | None = None
+    review_status: ReviewStatus | None = None
 
 
 class HumanReview(ReviewModel):
     schema_version: Literal[
         "seg144-forehand-backhand-human-review-v1",
         "experimental-forehand-backhand-human-review-v2",
+        "experimental-forehand-backhand-human-reference-v3",
     ]
     segment_index: int | None = Field(default=None, ge=0)
     fps: float = Field(gt=0)
@@ -62,10 +66,44 @@ class HumanReview(ReviewModel):
         if len(indexes) != len(set(indexes)):
             raise ValueError("human review contains duplicate event_index values")
         if (
-            self.schema_version == "experimental-forehand-backhand-human-review-v2"
+            self.schema_version
+            in {
+                "experimental-forehand-backhand-human-review-v2",
+                "experimental-forehand-backhand-human-reference-v3",
+            }
             and self.segment_index is None
         ):
-            raise ValueError("v2 human review requires segment_index")
+            raise ValueError("v2/v3 human review requires segment_index")
+        if self.schema_version == "experimental-forehand-backhand-human-reference-v3":
+            for item in self.reviews:
+                if item.review_status is None:
+                    raise ValueError("v3 review entries require review_status")
+                if (
+                    item.review_status == "labeled"
+                    and item.reference_side is None
+                ):
+                    raise ValueError(
+                        "a labeled v3 review entry requires reference_side"
+                    )
+                if (
+                    item.review_status != "labeled"
+                    and item.reference_side is not None
+                ):
+                    raise ValueError(
+                        "only labeled v3 review entries may have reference_side"
+                    )
+                expected_verdict: Verdict = (
+                    "correct"
+                    if item.review_status == "labeled"
+                    and item.side == item.reference_side
+                    else "incorrect"
+                    if item.review_status == "labeled"
+                    else item.review_status
+                )
+                if item.verdict != expected_verdict:
+                    raise ValueError(
+                        "v3 verdict is inconsistent with reference_side"
+                    )
         return self
 
 
@@ -74,15 +112,28 @@ def _opposite(side: Side) -> Side:
 
 
 def _summary(items: list[dict[str, object]]) -> dict[str, object]:
-    decided = [item for item in items if item["verdict"] in {"correct", "incorrect"}]
+    binary = [item for item in items if item["predicted_side"] is not None]
+    decided = [
+        item
+        for item in binary
+        if item["verdict"] in {"correct", "incorrect"}
+    ]
     correct = sum(item["verdict"] == "correct" for item in decided)
+    abstained = [item for item in items if item["predicted_side"] is None]
     return {
         "total": len(items),
-        "decided": len(decided),
-        "correct": correct,
-        "incorrect": len(decided) - correct,
-        "uncertain": sum(item["verdict"] == "uncertain" for item in items),
-        "accuracy_on_decided": correct / len(decided) if decided else None,
+        "binary_predictions": len(binary),
+        "binary_reviewed": len(decided),
+        "binary_correct": correct,
+        "binary_incorrect": len(decided) - correct,
+        "selective_accuracy": correct / len(decided) if decided else None,
+        "abstentions": len(abstained),
+        "appropriate_abstentions": sum(
+            item["verdict"] in {"correct", "uncertain"} for item in abstained
+        ),
+        "unnecessary_abstentions": sum(
+            item["verdict"] == "incorrect" for item in abstained
+        ),
     }
 
 
@@ -116,8 +167,10 @@ def analyze_review(result, review: HumanReview) -> dict[str, object]:
             raise ValueError(
                 f"review event {event_index} does not match result fields: {mismatches}"
             )
-        inferred_reference: Side | None = None
-        if item.side is not None and item.verdict == "correct":
+        inferred_reference: Side | None = item.reference_side
+        if inferred_reference is not None:
+            pass
+        elif item.side is not None and item.verdict == "correct":
             inferred_reference = item.side
         elif item.side is not None and item.verdict == "incorrect":
             inferred_reference = _opposite(item.side)
@@ -130,13 +183,33 @@ def analyze_review(result, review: HumanReview) -> dict[str, object]:
                 "heuristic_margin": item.margin,
                 "verdict": item.verdict,
                 "inferred_reference_side": inferred_reference,
+                "body_flipped_from_court_prior": shot.detail.get(
+                    "body_flipped_from_court_prior"
+                ),
+                "flip_confidence": shot.detail.get("flip_confidence"),
+                "accepted_racket_frames": shot.detail.get(
+                    "accepted_racket_frames"
+                ),
             }
         )
 
     total = len(rows)
     predicted = [item for item in rows if item["predicted_side"] is not None]
-    decided = [item for item in rows if item["verdict"] in {"correct", "incorrect"}]
+    decided = [
+        item
+        for item in predicted
+        if item["verdict"] in {"correct", "incorrect"}
+    ]
     correct = sum(item["verdict"] == "correct" for item in decided)
+    abstained = [item for item in rows if item["predicted_side"] is None]
+    appropriate_abstentions = [
+        item
+        for item in abstained
+        if item["verdict"] in {"correct", "uncertain"}
+    ]
+    unnecessary_abstentions = [
+        item for item in abstained if item["verdict"] == "incorrect"
+    ]
     confusion = {
         truth: {prediction: 0 for prediction in ("forehand", "backhand")}
         for truth in ("forehand", "backhand")
@@ -219,12 +292,22 @@ def analyze_review(result, review: HumanReview) -> dict[str, object]:
             "review_unreviewed": sum(
                 item["verdict"] == "unreviewed" for item in rows
             ),
+            "binary_reviewed": len(decided),
+            "binary_correct": correct,
+            "binary_incorrect": len(decided) - correct,
+            "appropriate_abstentions": len(appropriate_abstentions),
+            "unnecessary_abstentions": len(unnecessary_abstentions),
         },
         "metrics": {
             "classifier_coverage": len(predicted) / total if total else 0,
-            "human_decidable_coverage": len(decided) / total if total else 0,
+            "binary_review_coverage": len(decided) / total if total else 0,
             "selective_accuracy": correct / len(decided) if decided else None,
             "overall_correct_fraction": correct / total if total else None,
+            "abstention_appropriateness": (
+                len(appropriate_abstentions) / len(abstained)
+                if abstained
+                else None
+            ),
             "forehand_precision": forehand_precision,
             "forehand_recall": forehand_recall,
             "forehand_f1": forehand_f1,
@@ -248,16 +331,22 @@ def analyze_review(result, review: HumanReview) -> dict[str, object]:
             key: _summary(by_margin.get(key, []))
             for key in ("<0.08", "0.08-0.40", "0.40-0.60", ">=0.60")
         },
+        "review_rows": rows,
         "errors": [
-            item for item in rows if item["verdict"] == "incorrect"
+            item
+            for item in predicted
+            if item["verdict"] == "incorrect"
         ],
+        "unnecessary_abstentions": unnecessary_abstentions,
+        "appropriate_abstentions": appropriate_abstentions,
         "uncertain": [
             item for item in rows if item["verdict"] == "uncertain"
         ],
         "notes": [
-            "Selective accuracy excludes uncertain and unreviewed events.",
+            "Selective accuracy uses only non-null binary predictions reviewed as correct or incorrect.",
+            "A null prediction reviewed as incorrect is an unnecessary abstention, not a binary confusion-matrix error, because review v2 does not record the corrected side.",
             "For a binary non-null prediction, an incorrect verdict infers the opposite side as the reference label.",
-            "Metrics describe one 17-hit rally and do not establish cross-match generalization.",
+            "Metrics describe one rally and do not establish cross-match generalization.",
         ],
     }
 
@@ -268,6 +357,7 @@ def render_markdown(metrics: dict[str, object]) -> str:
     confusion = metrics["confusion_matrix"]
     errors = metrics["errors"]
     uncertain = metrics["uncertain"]
+    unnecessary_abstentions = metrics["unnecessary_abstentions"]
     error_lines = "\n".join(
         f"- Event {item['event_index']}: predicted {item['predicted_side']}, "
         f"inferred reference {item['inferred_reference_side']}, "
@@ -279,7 +369,18 @@ def render_markdown(metrics: dict[str, object]) -> str:
         f"stroke {item['stroke_type']}, margin {item['heuristic_margin']:.4f}."
         for item in uncertain
     ) or "- None."
-    return f"""# SEG144 Forehand/Backhand Human Review Metrics
+    abstention_lines = "\n".join(
+        f"- Event {item['event_index']}: stroke {item['stroke_type']} was unknown, "
+        "but the reviewer marked the abstention incorrect."
+        for item in unnecessary_abstentions
+    ) or "- None."
+    macro_f1 = scores["macro_f1"]
+    macro_f1_text = f"{macro_f1:.4f}" if macro_f1 is not None else "n/a"
+    selective_accuracy = scores["selective_accuracy"]
+    selective_accuracy_text = (
+        f"{selective_accuracy:.2%}" if selective_accuracy is not None else "n/a"
+    )
+    return f"""# SEG{metrics['segment_index']} Forehand/Backhand Human Review Metrics
 
 Review time: {metrics['reviewed_at']}
 
@@ -288,10 +389,11 @@ Review time: {metrics['reviewed_at']}
 - Total hits: {counts['total']}
 - Predicted side: {counts['predicted']}
 - Unknown prediction: {counts['unknown_prediction']}
-- Human correct / incorrect / uncertain: {counts['review_correct']} / {counts['review_incorrect']} / {counts['review_uncertain']}
+- Binary correct / incorrect: {counts['binary_correct']} / {counts['binary_incorrect']}
+- Appropriate / unnecessary abstentions: {counts['appropriate_abstentions']} / {counts['unnecessary_abstentions']}
 - Classifier coverage: {scores['classifier_coverage']:.2%}
-- Selective accuracy: {scores['selective_accuracy']:.2%}
-- Macro F1 on decided binary hits: {scores['macro_f1']:.4f}
+- Selective accuracy: {selective_accuracy_text}
+- Macro F1 on decided binary hits: {macro_f1_text}
 
 ## Confusion matrix
 
@@ -312,9 +414,13 @@ corrected label.
 
 {uncertain_lines}
 
+## Unnecessary abstentions
+
+{abstention_lines}
+
 ## Interpretation boundary
 
-This is one 17-hit rally. Selective accuracy excludes uncertain hits and must not
+This is one rally. Selective accuracy excludes null, uncertain and unreviewed hits and must not
 be reported as a production accuracy estimate or cross-match validation result.
 """
 

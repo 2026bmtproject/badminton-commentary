@@ -21,6 +21,15 @@ REVIEW_SCRIPT = SCRIPT.with_name("analyze_forehand_backhand_review.py")
 REVIEW_MODULE = runpy.run_path(str(REVIEW_SCRIPT))
 HumanReview = REVIEW_MODULE["HumanReview"]
 analyze_review = REVIEW_MODULE["analyze_review"]
+REVIEW_SET_SCRIPT = SCRIPT.with_name("analyze_forehand_backhand_review_set.py")
+REVIEW_SET_MODULE = runpy.run_path(str(REVIEW_SET_SCRIPT))
+aggregate_metrics = REVIEW_SET_MODULE["aggregate_metrics"]
+ABLATION_SCRIPT = SCRIPT.with_name(
+    "compare_forehand_backhand_orientation_ablation.py"
+)
+ABLATION_MODULE = runpy.run_path(str(ABLATION_SCRIPT))
+Variant = ABLATION_MODULE["Variant"]
+score_variant = ABLATION_MODULE["score_variant"]
 
 
 def _pose(*, elbow_x: float, wrist_x: float):
@@ -97,6 +106,44 @@ def test_confidence_gate_abstains_when_too_few_racket_frames_are_reliable():
     assert margin == 0
     assert detail["accepted_racket_frames"] == 1
     assert detail["reason"] == "insufficient high-confidence racket-arm frames"
+
+
+def test_court_prior_and_invert_disagreement_are_equivalent_on_true_branch():
+    pose_by_frame = {100: _pose(elbow_x=145.0, wrist_x=170.0)}
+    original_side, _, original_detail = classify_hit(
+        hit_frame=100,
+        court_position="top",
+        pose_by_frame=pose_by_frame,
+        left_handed=False,
+        config=Config(min_racket_frames=1),
+    )
+    prior_side, _, prior_detail = classify_hit(
+        hit_frame=100,
+        court_position="top",
+        pose_by_frame=pose_by_frame,
+        left_handed=False,
+        config=Config(
+            min_racket_frames=1,
+            orientation_policy="court_prior",
+        ),
+    )
+    inverted_side, _, inverted_detail = classify_hit(
+        hit_frame=100,
+        court_position="top",
+        pose_by_frame=pose_by_frame,
+        left_handed=False,
+        config=Config(
+            min_racket_frames=1,
+            orientation_policy="invert_disagreement",
+        ),
+    )
+
+    assert original_detail["vote_disagreed_with_court_prior"] is True
+    assert original_detail["body_flipped_from_court_prior"] is True
+    assert prior_detail["body_flipped_from_court_prior"] is False
+    assert inverted_detail["body_flipped_from_court_prior"] is False
+    assert original_side != prior_side
+    assert prior_side == inverted_side
 
 
 def test_frame_viewer_contains_review_shortcuts():
@@ -207,7 +254,109 @@ def test_human_review_metrics_exclude_uncertain_from_selective_accuracy():
 
     assert metrics["metrics"]["classifier_coverage"] == 2 / 3
     assert metrics["metrics"]["selective_accuracy"] == 0.5
+    assert metrics["metrics"]["abstention_appropriateness"] == 1
     assert metrics["confusion_matrix"]["forehand"] == {
         "forehand": 1,
         "backhand": 1,
     }
+
+
+def test_incorrect_unknown_is_an_unnecessary_abstention_not_binary_error():
+    result = ExperimentOutput.model_validate(
+        {
+            "schema_version": "experimental-forehand-backhand-v1",
+            "segment_index": 140,
+            "fps": 30,
+            "source_start_frame": 100,
+            "source_end_frame": 120,
+            "player_mapping": {"top": "b", "bottom": "a"},
+            "left_handed_players": [],
+            "params": {},
+            "shots": [{
+                "event_index": 1, "frame": 110, "local_frame": 10,
+                "player": "a", "court_position": "bottom", "hand": "right",
+                "stroke_type": "小球", "stroke_confidence": 0.9,
+                "side": None, "side_zh": "未知", "heuristic_margin": 0,
+                "frames_used": 1, "detail": {},
+            }],
+            "summary": {}, "limitations": [],
+        }
+    )
+    review = HumanReview.model_validate(
+        {
+            "schema_version": "experimental-forehand-backhand-human-review-v2",
+            "segment_index": 140,
+            "fps": 30,
+            "reviewed_at": "2026-08-13T00:00:00Z",
+            "reviews": [{
+                "event_index": 1, "local_frame": 10, "player": "a",
+                "stroke_type": "小球", "side": None, "side_zh": "未知",
+                "margin": 0, "verdict": "incorrect",
+            }],
+        }
+    )
+
+    metrics = analyze_review(result, review)
+
+    assert metrics["metrics"]["selective_accuracy"] is None
+    assert metrics["counts"]["binary_incorrect"] == 0
+    assert metrics["counts"]["unnecessary_abstentions"] == 1
+    assert sum(sum(row.values()) for row in metrics["confusion_matrix"].values()) == 0
+
+
+def test_review_set_aggregation_exposes_orientation_failure_cluster():
+    rows = [
+        {
+            "event_index": 1,
+            "player": "a",
+            "stroke_type": "小球",
+            "predicted_side": "forehand",
+            "heuristic_margin": 0.9,
+            "verdict": "incorrect",
+            "inferred_reference_side": "backhand",
+            "body_flipped_from_court_prior": True,
+            "flip_confidence": 1.0,
+            "accepted_racket_frames": 5,
+        },
+        {
+            "event_index": 2,
+            "player": "b",
+            "stroke_type": "殺球",
+            "predicted_side": "forehand",
+            "heuristic_margin": 0.8,
+            "verdict": "correct",
+            "inferred_reference_side": "forehand",
+            "body_flipped_from_court_prior": False,
+            "flip_confidence": 1.0,
+            "accepted_racket_frames": 5,
+        },
+    ]
+    summary = aggregate_metrics(
+        [{"segment_index": 140, "counts": {}, "metrics": {}, "review_rows": rows}],
+        [{"segment_index": 140, "status": "compatible"}],
+    )
+
+    flipped = summary["by_orientation_decision"]["flipped_from_court_prior"]
+    followed = summary["by_orientation_decision"]["followed_court_prior"]
+    assert flipped["selective_accuracy"] == 0
+    assert followed["selective_accuracy"] == 1
+
+
+def test_ablation_accuracy_uses_fixed_denominator_for_unknown():
+    result = SimpleNamespace(
+        shots=[
+            SimpleNamespace(event_index=1, side="forehand"),
+            SimpleNamespace(event_index=2, side=None),
+        ]
+    )
+    score, predictions = score_variant(
+        variant=Variant("T", "test", Config()),
+        results={140: result},
+        references={(140, 1): "forehand", (140, 2): "backhand"},
+        original_predictions=None,
+    )
+
+    assert predictions[(140, 2)] is None
+    assert score["accuracy_with_unknown_incorrect"] == 0.5
+    assert score["selective_accuracy"] == 1
+    assert score["confusion_matrix"]["backhand"]["unknown"] == 1
