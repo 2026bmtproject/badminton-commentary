@@ -30,6 +30,16 @@ ABLATION_SCRIPT = SCRIPT.with_name(
 ABLATION_MODULE = runpy.run_path(str(ABLATION_SCRIPT))
 Variant = ABLATION_MODULE["Variant"]
 score_variant = ABLATION_MODULE["score_variant"]
+HOLDOUT_SCRIPT = SCRIPT.with_name(
+    "generate_forehand_backhand_c_holdout_review.py"
+)
+HOLDOUT_MODULE = runpy.run_path(str(HOLDOUT_SCRIPT))
+render_holdout_index = HOLDOUT_MODULE["render_index"]
+HOLDOUT_ANALYZER_SCRIPT = SCRIPT.with_name(
+    "analyze_forehand_backhand_c_holdout_review.py"
+)
+HOLDOUT_ANALYZER_MODULE = runpy.run_path(str(HOLDOUT_ANALYZER_SCRIPT))
+score_holdout_rows = HOLDOUT_ANALYZER_MODULE["score_rows"]
 
 
 def _pose(*, elbow_x: float, wrist_x: float):
@@ -182,9 +192,10 @@ def test_frame_viewer_contains_review_shortcuts():
     rendered = render_viewer(result, "overlay.mp4")
 
     assert "arrowleft" in rendered
-    assert "review('correct')" in rendered
+    assert "review('forehand')" in rendered
+    assert "review('backhand')" in rendered
     assert "seg0144_forehand_backhand_human_review.json" in rendered
-    assert "experimental-forehand-backhand-human-review-v2" in rendered
+    assert "experimental-forehand-backhand-human-reference-v3" in rendered
     assert "overlay.mp4" in rendered
 
 
@@ -360,3 +371,104 @@ def test_ablation_accuracy_uses_fixed_denominator_for_unknown():
     assert score["accuracy_with_unknown_incorrect"] == 0.5
     assert score["selective_accuracy"] == 1
     assert score["confusion_matrix"]["backhand"]["unknown"] == 1
+
+
+def test_v3_reference_records_the_side_for_an_incorrect_unknown_candidate():
+    result = ExperimentOutput.model_validate(
+        {
+            "schema_version": "experimental-forehand-backhand-v1",
+            "segment_index": 144,
+            "fps": 30,
+            "source_start_frame": 100,
+            "source_end_frame": 120,
+            "player_mapping": {"top": "b", "bottom": "a"},
+            "left_handed_players": [],
+            "params": {},
+            "shots": [{
+                "event_index": 1, "frame": 110, "local_frame": 10,
+                "player": "a", "court_position": "bottom", "hand": "right",
+                "stroke_type": "小球", "stroke_confidence": 0.9,
+                "side": None, "side_zh": "未知", "heuristic_margin": 0,
+                "frames_used": 1, "detail": {},
+            }],
+            "summary": {}, "limitations": [],
+        }
+    )
+    review = HumanReview.model_validate(
+        {
+            "schema_version": "experimental-forehand-backhand-human-reference-v3",
+            "segment_index": 144,
+            "fps": 30,
+            "reviewed_at": "2026-08-15T00:00:00Z",
+            "reviews": [{
+                "event_index": 1, "local_frame": 10, "player": "a",
+                "stroke_type": "小球", "side": None, "side_zh": "未知",
+                "margin": 0, "reference_side": "backhand",
+                "review_status": "labeled", "verdict": "incorrect",
+            }],
+        }
+    )
+
+    metrics = analyze_review(result, review)
+
+    assert metrics["review_rows"][0]["inferred_reference_side"] == "backhand"
+    assert metrics["counts"]["unnecessary_abstentions"] == 1
+
+
+def test_holdout_index_links_each_court_prior_review_page():
+    rendered = render_holdout_index(
+        {
+            "rallies": [
+                {
+                    "segment_index": 144,
+                    "hits": 17,
+                    "duration_sec": 17.2,
+                    "unknown_candidates": 4,
+                    "video_name": "seg0144_C_overlay.mp4",
+                }
+            ]
+        }
+    )
+
+    assert "SEG144" in rendered
+    assert "seg0144_C_court_prior/frame_review.html" in rendered
+    assert "orientation_policy=court_prior" in rendered
+
+
+def test_holdout_score_counts_unknown_as_incorrect_on_fixed_denominator():
+    rows = [
+        {
+            "event_index": 1,
+            "player": "a",
+            "stroke_type": "小球",
+            "predicted_side": "forehand",
+            "inferred_reference_side": "forehand",
+            "verdict": "correct",
+            "heuristic_margin": 0.8,
+        },
+        {
+            "event_index": 2,
+            "player": "b",
+            "stroke_type": "高遠球",
+            "predicted_side": None,
+            "inferred_reference_side": "backhand",
+            "verdict": "incorrect",
+            "heuristic_margin": 0.0,
+        },
+        {
+            "event_index": 3,
+            "player": "a",
+            "stroke_type": "平快球",
+            "predicted_side": None,
+            "inferred_reference_side": None,
+            "verdict": "uncertain",
+            "heuristic_margin": 0.0,
+        },
+    ]
+
+    score = score_holdout_rows(rows)
+
+    assert score["counts"]["human_labeled"] == 2
+    assert score["metrics"]["classifier_coverage"] == 0.5
+    assert score["metrics"]["fixed_denominator_accuracy"] == 0.5
+    assert score["metrics"]["selective_accuracy"] == 1

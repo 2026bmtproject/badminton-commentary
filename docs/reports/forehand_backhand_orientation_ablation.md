@@ -95,6 +95,8 @@ C/D 相對 A 改變 8 拍，正好將 A 的 8 個 backhand→forehand 誤判全�
 3. 下一輪必須選擇尚未人工審核的新 rally，先凍結 C 的參數，再進行 hold-out review。
 4. 若新 rally 中確實存在球員轉身、round-the-head 或大幅 body rotation，court prior only 可能失敗；這正是 hold-out 必須覆蓋的案例。
 
+後續 hold-out 已凍結 SEG130、132、136、139、146，另加入使用者指定的 SEG144 C 版複審；完整標註方式與統計邊界見 [forehand_backhand_c_holdout_review_protocol.md](forehand_backhand_c_holdout_review_protocol.md)。
+
 ## 重跑方式
 
 ```powershell
@@ -111,4 +113,3 @@ uv run python .\experiments\ttyvsasy\scripts\compare_forehand_backhand_orientati
 - `outputs/ttyvsasy/forehand_backhand/orientation_ablation/B_face_weight_0/`
 - `outputs/ttyvsasy/forehand_backhand/orientation_ablation/C_court_prior_only/`
 - `outputs/ttyvsasy/forehand_backhand/orientation_ablation/D_invert_true_branch/`
-

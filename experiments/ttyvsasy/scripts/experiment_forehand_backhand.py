@@ -1034,22 +1034,23 @@ def render_viewer(result: ExperimentOutput, video_name: str) -> str:
     rows = "".join(
         "<tr data-index='{index}'><td><button class='jump' data-index='{index}'>"
         "#{event}</button></td><td>{frame}</td><td>{player}</td><td>{stroke}</td>"
-        "<td>{side}</td><td>{margin:.3f}</td><td class='verdict'>—</td></tr>".format(
+        "<td>{side}</td><td>{margin:.3f}</td>"
+        "<td class='reference'>未審核</td></tr>".format(
             index=index,
             event=item.event_index,
             frame=item.local_frame,
             player=html.escape(item.player),
             stroke=html.escape(item.stroke_type),
-            side=html.escape(item.side_zh),
+            side=html.escape(item.side or "unknown"),
             margin=item.heuristic_margin,
         )
         for index, item in enumerate(result.shots)
     )
     segment_label = f"seg{result.segment_index:04d}"
-    review_schema = "experimental-forehand-backhand-human-review-v2"
+    review_schema = "experimental-forehand-backhand-human-reference-v3"
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8">
-<title>SEG{result.segment_index} 正反手逐幀檢查</title>
+<title>SEG{result.segment_index} 正反手人工 reference</title>
 <style>
 body{{font-family:Segoe UI,Microsoft JhengHei,sans-serif;background:#0f172a;color:#e2e8f0;margin:20px}}
 main{{display:grid;grid-template-columns:minmax(640px,2fr) minmax(420px,1fr);gap:20px}}
@@ -1058,26 +1059,26 @@ kbd{{background:#334155;border:1px solid #64748b;border-radius:4px;padding:2px 6
 table{{width:100%;border-collapse:collapse;font-size:14px}}th,td{{padding:6px;border-bottom:1px solid #334155;text-align:left}}
 tr.active{{background:#334155}} button{{cursor:pointer}} .good{{color:#4ade80}} .bad{{color:#fb7185}} .unsure{{color:#c4b5fd}}
 </style></head><body>
-<h1>SEG{result.segment_index} 正反手 heuristic 人工檢查</h1>
-<p>輸出是 2D heuristic，不是 ground truth。先在擊球幀前後逐幀看持拍臂，再標人工 verdict。</p>
+<h1>SEG{result.segment_index} 正反手人工 reference</h1>
+<p>請依影片標記人工側別，不要依照候選結果按正確或錯誤；畫面不足時請標記無法判定。</p>
 <main><section><video id="video" controls preload="auto" src="{html.escape(video_name)}"></video>
 <div class="panel"><strong id="status">載入中</strong><br>
 <kbd>←</kbd>/<kbd>→</kbd> 前後 1 幀　<kbd>Shift</kbd>+方向鍵 10 幀　
 <kbd>P</kbd>/<kbd>N</kbd> 上／下一擊　<kbd>Space</kbd> 播放／暫停<br>
-<kbd>C</kbd> 正確　<kbd>X</kbd> 錯誤　<kbd>U</kbd> 無法判斷　<kbd>E</kbd> 匯出 review JSON</div></section>
-<section class="panel"><table><thead><tr><th>Event</th><th>Local frame</th><th>Player</th><th>Stroke</th><th>判定</th><th>Margin</th><th>人工</th></tr></thead><tbody>{rows}</tbody></table></section></main>
+<kbd>F</kbd> 正手　<kbd>B</kbd> 反手　<kbd>U</kbd> 無法判定　<kbd>E</kbd> 匯出 reference JSON</div></section>
+<section class="panel"><table><thead><tr><th>Event</th><th>Local frame</th><th>Player</th><th>Stroke</th><th>候選</th><th>Margin</th><th>人工 reference</th></tr></thead><tbody>{rows}</tbody></table></section></main>
 <script>
 const fps={result.fps}; const events={events_json}; const video=document.getElementById('video');
 const status=document.getElementById('status'); const rows=[...document.querySelectorAll('tbody tr')];
-const storageKey='{segment_label}-forehand-backhand-review-v2'; let reviews=JSON.parse(localStorage.getItem(storageKey)||'{{}}'); let selected=0;
+const storageKey='{segment_label}-forehand-backhand-reference-v3'; let reviews=JSON.parse(localStorage.getItem(storageKey)||'{{}}'); let selected=0;
 function frame(){{return Math.round(video.currentTime*fps)}}
 function seekFrame(value){{video.pause(); video.currentTime=Math.max(0,value)/fps}}
 function choose(index){{selected=Math.max(0,Math.min(events.length-1,index)); seekFrame(events[selected].local_frame); paint()}}
-function paint(){{rows.forEach((row,i)=>{{row.classList.toggle('active',i===selected); const v=reviews[events[i].event_index]; const cell=row.querySelector('.verdict'); cell.textContent=v==='correct'?'正確':v==='incorrect'?'錯誤':v==='uncertain'?'無法判斷':'—'; cell.className='verdict '+(v==='correct'?'good':v==='incorrect'?'bad':v==='uncertain'?'unsure':'')}}); const e=events[selected]; status.textContent=`frame ${{frame()}} · event #${{e.event_index}} hit frame ${{e.local_frame}} · ${{e.player}} ${{e.stroke_type}} · ${{e.side_zh}} margin ${{e.margin.toFixed(3)}}`}}
+function paint(){{rows.forEach((row,i)=>{{row.classList.toggle('active',i===selected); const v=reviews[events[i].event_index]; const cell=row.querySelector('.reference'); const label=v==='forehand'?'正手':v==='backhand'?'反手':v==='uncertain'?'無法判定':'未審核'; const matches=(v==='forehand'||v==='backhand')&&v===events[i].side; cell.textContent=label; cell.className='reference '+(v==='uncertain'?'unsure':matches?'good':v?'bad':'')}}); const e=events[selected]; status.textContent=`frame ${{frame()}} · event #${{e.event_index}} · hit frame ${{e.local_frame}} · ${{e.player}} ${{e.stroke_type}} · candidate ${{e.side||'unknown'}} · margin ${{e.margin.toFixed(3)}}`}}
 function review(value){{reviews[events[selected].event_index]=value; localStorage.setItem(storageKey,JSON.stringify(reviews)); paint()}}
-function exportReview(){{const payload={{schema_version:'{review_schema}',segment_index:{result.segment_index},fps,reviewed_at:new Date().toISOString(),reviews:events.map(e=>({{...e,verdict:reviews[e.event_index]||'unreviewed'}}))}}; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{{type:'application/json'}})); a.download='{segment_label}_forehand_backhand_human_review.json'; a.click(); URL.revokeObjectURL(a.href)}}
+function exportReview(){{const payload={{schema_version:'{review_schema}',segment_index:{result.segment_index},fps,reviewed_at:new Date().toISOString(),reviews:events.map(e=>{{const value=reviews[e.event_index]; const labeled=value==='forehand'||value==='backhand'; const review_status=labeled?'labeled':value==='uncertain'?'uncertain':'unreviewed'; const reference_side=labeled?value:null; const verdict=labeled?(e.side===reference_side?'correct':'incorrect'):review_status; return {{...e,reference_side,review_status,verdict}}}})}}; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{{type:'application/json'}})); a.download='{segment_label}_forehand_backhand_human_review.json'; a.click(); URL.revokeObjectURL(a.href)}}
 document.querySelectorAll('.jump').forEach(button=>button.onclick=()=>choose(Number(button.dataset.index)));
-document.addEventListener('keydown',event=>{{if(event.target.tagName==='INPUT')return; const key=event.key.toLowerCase(); if(key==='arrowleft'){{event.preventDefault();seekFrame(frame()-(event.shiftKey?10:1))}} else if(key==='arrowright'){{event.preventDefault();seekFrame(frame()+(event.shiftKey?10:1))}} else if(key==='p')choose(selected-1); else if(key==='n')choose(selected+1); else if(key==='c')review('correct'); else if(key==='x')review('incorrect'); else if(key==='u')review('uncertain'); else if(key==='e')exportReview(); else if(event.code==='Space'){{event.preventDefault();video.paused?video.play():video.pause()}}}});
+document.addEventListener('keydown',event=>{{if(event.target.tagName==='INPUT')return; const key=event.key.toLowerCase(); if(key==='arrowleft'){{event.preventDefault();seekFrame(frame()-(event.shiftKey?10:1))}} else if(key==='arrowright'){{event.preventDefault();seekFrame(frame()+(event.shiftKey?10:1))}} else if(key==='p')choose(selected-1); else if(key==='n')choose(selected+1); else if(key==='f')review('forehand'); else if(key==='b')review('backhand'); else if(key==='u')review('uncertain'); else if(key==='e')exportReview(); else if(event.code==='Space'){{event.preventDefault();video.paused?video.play():video.pause()}}}});
 video.addEventListener('timeupdate',paint); video.addEventListener('seeked',paint); choose(0);
 </script></body></html>"""
 

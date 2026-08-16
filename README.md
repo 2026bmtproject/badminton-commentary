@@ -331,7 +331,11 @@ ASS 與 FFmpeg 只用於 demo、evaluation、展示影片；`RallyCommentaryServ
 2D pose 正反手 confidence-gate 的人工審核與失敗分析見
 [docs/reports/forehand_backhand_confidence_gate_review.md](docs/reports/forehand_backhand_confidence_gate_review.md)；
 orientation A/B/C/D 比較見
-[docs/reports/forehand_backhand_orientation_ablation.md](docs/reports/forehand_backhand_orientation_ablation.md)。
+[docs/reports/forehand_backhand_orientation_ablation.md](docs/reports/forehand_backhand_orientation_ablation.md)；
+C 版本新 rally 人工審核 protocol 見
+[docs/reports/forehand_backhand_c_holdout_review_protocol.md](docs/reports/forehand_backhand_c_holdout_review_protocol.md)；
+hold-out 結果與 coverage 分析見
+[docs/reports/forehand_backhand_c_holdout_results.md](docs/reports/forehand_backhand_c_holdout_results.md)。
 
 ```powershell
 uv sync
