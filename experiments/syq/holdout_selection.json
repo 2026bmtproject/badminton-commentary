@@ -1,0 +1,67 @@
+{
+  "schema_version": "syq-forehand-backhand-holdout-selection-v1",
+  "status": "abandoned_before_human_review",
+  "exclusion_reason": "The 640x360 source video is too low-resolution for reliable frame-level forehand/backhand human review.",
+  "excluded_from_metrics": true,
+  "selected_before_classifier_run": true,
+  "variant": "C_court_prior",
+  "players": {
+    "a": "SHI Y.Q.",
+    "b": "FAIHAN"
+  },
+  "handedness": {
+    "a": "right",
+    "b": "right"
+  },
+  "selection_basis": "One medium-length rally from each temporal match bin, using only segment duration, player-known stroke count, and input pose availability.",
+  "segments": [
+    {
+      "segment_index": 12,
+      "top_player": "b",
+      "bottom_player": "a",
+      "player_strokes": 11,
+      "duration_sec": 16.567,
+      "mapping_evidence_frame": 23182
+    },
+    {
+      "segment_index": 25,
+      "top_player": "b",
+      "bottom_player": "a",
+      "player_strokes": 11,
+      "duration_sec": 13.667,
+      "mapping_evidence_frame": 40795
+    },
+    {
+      "segment_index": 51,
+      "top_player": "a",
+      "bottom_player": "b",
+      "player_strokes": 12,
+      "duration_sec": 14.933,
+      "mapping_evidence_frame": 69951
+    },
+    {
+      "segment_index": 72,
+      "top_player": "a",
+      "bottom_player": "b",
+      "player_strokes": 13,
+      "duration_sec": 17.867,
+      "mapping_evidence_frame": 95691
+    },
+    {
+      "segment_index": 92,
+      "top_player": "b",
+      "bottom_player": "a",
+      "player_strokes": 18,
+      "duration_sec": 18.967,
+      "mapping_evidence_frame": 119541
+    },
+    {
+      "segment_index": 111,
+      "top_player": "a",
+      "bottom_player": "b",
+      "player_strokes": 11,
+      "duration_sec": 11.6,
+      "mapping_evidence_frame": 139501
+    }
+  ]
+}

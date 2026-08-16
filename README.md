@@ -281,7 +281,8 @@ badminton-commentary/
 │   ├── config.py
 │   └── subtitles.py        # optional artifact utility, not service dependency
 ├── experiments/
-│   └── ttyvsasy/           # evaluation harness and ignored local workspace
+│   ├── ttyvsasy/           # first-match evaluation harness
+│   └── syq/                # second-match hold-out workspace contract
 ├── fixtures/
 │   ├── sample_match/       # normalized Fact Builder fixture
 │   └── upstream_stages/    # actual main-system stage structure fixture
@@ -308,6 +309,9 @@ outputs/ttyvsasy JSON / ASS / rendered demo video
 
 完整指令與資料配置請見
 [experiments/ttyvsasy/README.md](experiments/ttyvsasy/README.md)。
+
+SYQ 第二場比賽因 640×360 來源影片不足以可靠人工審核，已在產生正式指標前淘汰；input audit 與排除紀錄見
+[experiments/syq/README.md](experiments/syq/README.md)。
 
 ASS 與 FFmpeg 只用於 demo、evaluation、展示影片；`RallyCommentaryService` 不 import 或
 執行這些功能。
